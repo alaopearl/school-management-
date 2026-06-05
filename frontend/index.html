@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Record Tracker - Creche to Senior Secondary</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-top">
+                <div>
+                    <h1>📚 Student Record Tracker</h1>
+                    <p>Secure access for school staff and administrators.</p>
+                </div>
+                <div class="user-panel">
+                    <span id="user-greeting">Not signed in</span>
+                    <button id="logout-btn" class="btn btn-secondary hidden">Logout</button>
+                </div>
+            </div>
+        </header>
+
+        <section id="login-section" class="login-section">
+            <h2>School Access</h2>
+            <div class="auth-switch">
+                <button type="button" id="show-login-btn" class="btn btn-secondary active">Login</button>
+                <button type="button" id="show-register-btn" class="btn btn-secondary">Register School</button>
+            </div>
+
+            <div id="login-form-container" class="auth-form">
+                <form id="login-form" class="form">
+                    <div class="form-row">
+                        <div class="form-group full-width">
+                            <label for="login-email">Email Address:</label>
+                            <input type="email" id="login-email" placeholder="Enter your school email" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group full-width">
+                            <label for="login-password">Password:</label>
+                            <input type="password" id="login-password" placeholder="Enter your password" required>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Login</button>
+                    </div>
+                    <p id="login-message" class="login-message"></p>
+                </form>
+            </div>
+
+            <div id="register-form-container" class="auth-form hidden">
+                <form id="register-form" class="form">
+                    <div class="form-row">
+                        <div class="form-group full-width">
+                            <label for="school-name">School Name:</label>
+                            <input type="text" id="school-name" placeholder="Enter school name" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group full-width">
+                            <label for="school-code">School Code:</label>
+                            <input type="text" id="school-code" placeholder="Unique school code" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group full-width">
+                            <label for="logo-url">Logo URL (optional):</label>
+                            <input type="url" id="logo-url" placeholder="https://example.com/logo.png">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group full-width">
+                            <label for="admin-name">Admin Full Name:</label>
+                            <input type="text" id="admin-name" placeholder="Enter administrator name" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group full-width">
+                            <label for="admin-email">Admin Email:</label>
+                            <input type="email" id="admin-email" placeholder="Enter administrator email" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group full-width">
+                            <label for="admin-password">Password:</label>
+                            <input type="password" id="admin-password" placeholder="Create a password" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group full-width">
+                            <label for="admin-password-confirm">Confirm Password:</label>
+                            <input type="password" id="admin-password-confirm" placeholder="Confirm your password" required>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Register School</button>
+                    </div>
+                    <p id="register-message" class="login-message"></p>
+                </form>
+            </div>
+
+            <div id="otp-verification-container" class="auth-form hidden">
+                <h3>Verify Your Email</h3>
+                <p style="color: #64748b; margin-bottom: 16px;" id="otp-email-display"></p>
+                <form id="otp-verification-form" class="form">
+                    <div class="form-row">
+                        <div class="form-group full-width">
+                            <label for="otp-input">Enter OTP (6 digits):</label>
+                            <input type="text" id="otp-input" placeholder="000000" maxlength="6" inputmode="numeric" required>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Verify OTP</button>
+                        <button type="button" id="resend-otp-btn" class="btn btn-secondary">Resend OTP</button>
+                    </div>
+                    <p id="otp-message" class="login-message"></p>
+                </form>
+            </div>
+        </section>
+
+        <!-- Navigation -->
+         <!-- this is the navigation -->
+        <nav class="nav-tabs">
+            <button class="nav-btn active" data-section="overview">Overview</button>
+            <button class="nav-btn" data-section="add-student">Add Student</button>
+            <button class="nav-btn" data-section="manage">Manage Records</button>
+            <button class="nav-btn" data-section="search">Search</button>
+            <button class="nav-btn" data-section="reports">Reports</button>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="content">
+            <!-- Overview Section -->
+            <section id="overview" class="section active">
+                <h2>Dashboard Overview</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>Total Students</h3>
+                        <p class="stat-number" id="total-students">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Active Records</h3>
+                        <p class="stat-number" id="active-students">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Graduated</h3>
+                        <p class="stat-number" id="graduated-students">0</p>
+                    </div>
+                </div>
+
+                <h3>Student Distribution by Level</h3>
+                <div class="level-distribution" id="level-distribution">
+                    <!-- Populated by JavaScript -->
+                </div>
+
+                <div class="recent-students">
+                    <h3>Recent Records</h3>
+                    <div id="recent-list">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Add Student Section -->
+            <section id="add-student" class="section">
+                <h2>Add New Student Record</h2>
+                <form id="student-form" class="form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="student-id">Student ID:</label>
+                            <input type="text" id="student-id" placeholder="e.g., STU001" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="student-name">Full Name:</label>
+                            <input type="text" id="student-name" placeholder="Enter full name" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="date-of-birth">Date of Birth:</label>
+                            <input type="date" id="date-of-birth" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="gender">Gender:</label>
+                            <select id="gender" required>
+                                <option value="">Select Gender</option>
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="current-level">Current Educational Level:</label>
+                            <select id="current-level" required>
+                                <option value="">Select Level</option>
+                                <option value="Creche">Creche</option>
+                                <option value="Nursery">Nursery</option>
+                                <option value="Primary 1">Primary 1</option>
+                                <option value="Primary 2">Primary 2</option>
+                                <option value="Primary 3">Primary 3</option>
+                                <option value="Primary 4">Primary 4</option>
+                                <option value="Primary 5">Primary 5</option>
+                                <option value="Primary 6">Primary 6</option>
+                                <option value="Junior Secondary 1">Junior Secondary 1</option>
+                                <option value="Junior Secondary 2">Junior Secondary 2</option>
+                                <option value="Junior Secondary 3">Junior Secondary 3</option>
+                                <option value="Senior Secondary 1">Senior Secondary 1</option>
+                                <option value="Senior Secondary 2">Senior Secondary 2</option>
+                                <option value="Senior Secondary 3">Senior Secondary 3</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="enrollment-date">Enrollment Date:</label>
+                            <input type="date" id="enrollment-date" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="parent-name">Parent/Guardian Name:</label>
+                            <input type="text" id="parent-name" placeholder="Enter parent/guardian name" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="contact-number">Contact Number:</label>
+                            <input type="tel" id="contact-number" placeholder="Enter phone number" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group full-width">
+                            <label for="address">Address:</label>
+                            <textarea id="address" placeholder="Enter residential address" rows="3"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="current-gpa">Current GPA/Grade:</label>
+                            <input type="number" id="current-gpa" min="0" max="5" step="0.1" placeholder="0.0 - 5.0">
+                        </div>
+                        <div class="form-group">
+                            <label for="status">Status:</label>
+                            <select id="status" required>
+                                <option value="Active">Active</option>
+                                <option value="On Leave">On Leave</option>
+                                <option value="Transferred">Transferred</option>
+                                <option value="Graduated">Graduated</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group full-width">
+                            <label for="notes">Additional Notes:</label>
+                            <textarea id="notes" placeholder="Any additional information or special notes" rows="3"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Add Student Record</button>
+                        <button type="reset" class="btn btn-secondary">Clear Form</button>
+                    </div>
+                </form>
+            </section>
+
+            <!-- Manage Records Section -->
+            <section id="manage" class="section">
+                <h2>Manage Student Records</h2>
+                
+                <div class="filter-bar">
+                    <select id="filter-level" class="filter-select">
+                        <option value="">All Levels</option>
+                        <option value="Creche">Creche</option>
+                        <option value="Nursery">Nursery</option>
+                        <option value="Primary 1">Primary 1</option>
+                        <option value="Primary 2">Primary 2</option>
+                        <option value="Primary 3">Primary 3</option>
+                        <option value="Primary 4">Primary 4</option>
+                        <option value="Primary 5">Primary 5</option>
+                        <option value="Primary 6">Primary 6</option>
+                        <option value="Junior Secondary 1">Junior Secondary 1</option>
+                        <option value="Junior Secondary 2">Junior Secondary 2</option>
+                        <option value="Junior Secondary 3">Junior Secondary 3</option>
+                        <option value="Senior Secondary 1">Senior Secondary 1</option>
+                        <option value="Senior Secondary 2">Senior Secondary 2</option>
+                        <option value="Senior Secondary 3">Senior Secondary 3</option>
+                    </select>
+
+                    <select id="filter-status" class="filter-select">
+                        <option value="">All Status</option>
+                        <option value="Active">Active</option>
+                        <option value="On Leave">On Leave</option>
+                        <option value="Transferred">Transferred</option>
+                        <option value="Graduated">Graduated</option>
+                    </select>
+
+                    <input type="text" id="sort-by" placeholder="Sort by name or ID" class="filter-select">
+                </div>
+
+                <div id="records-list" class="records-container">
+                    <!-- Populated by JavaScript -->
+                </div>
+            </section>
+
+            <!-- Search Section -->
+            <section id="search" class="section">
+                <h2>Search Student Records</h2>
+                
+                <div class="search-box">
+                    <input type="text" id="search-input" placeholder="Search by student name, ID, or parent name..." class="search-input">
+                    <button id="search-btn" class="btn btn-primary">Search</button>
+                </div>
+
+                <div id="search-results" class="search-results-container">
+                    <!-- Search results will appear here -->
+                </div>
+            </section>
+
+            <!-- Reports Section -->
+            <section id="reports" class="section">
+                <h2>Reports & Analytics</h2>
+                
+                <div class="report-options">
+                    <button class="btn btn-primary" id="export-btn">📥 Export All Records (CSV)</button>
+                    <button class="btn btn-primary" id="print-btn">🖨️ Print Report</button>
+                </div>
+
+                <div class="reports-grid">
+                    <div class="report-card">
+                        <h3>Average GPA by Level</h3>
+                        <div id="gpa-report">
+                            <!-- Populated by JavaScript -->
+                        </div>
+                    </div>
+
+                    <div class="report-card">
+                        <h3>Gender Distribution</h3>
+                        <div id="gender-report">
+                            <!-- Populated by JavaScript -->
+                        </div>
+                    </div>
+
+                    <div class="report-card">
+                        <h3>Status Summary</h3>
+                        <div id="status-report">
+                            <!-- Populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal for editing -->
+    <div id="edit-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Edit Student Record</h2>
+            <form id="edit-form" class="form">
+                <input type="hidden" id="edit-student-id">
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="edit-name">Full Name:</label>
+                        <input type="text" id="edit-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-current-level">Educational Level:</label>
+                        <select id="edit-current-level" required>
+                            <option value="Creche">Creche</option>
+                            <option value="Nursery">Nursery</option>
+                            <option value="Primary 1">Primary 1</option>
+                            <option value="Primary 2">Primary 2</option>
+                            <option value="Primary 3">Primary 3</option>
+                            <option value="Primary 4">Primary 4</option>
+                            <option value="Primary 5">Primary 5</option>
+                            <option value="Primary 6">Primary 6</option>
+                            <option value="Junior Secondary 1">Junior Secondary 1</option>
+                            <option value="Junior Secondary 2">Junior Secondary 2</option>
+                            <option value="Junior Secondary 3">Junior Secondary 3</option>
+                            <option value="Senior Secondary 1">Senior Secondary 1</option>
+                            <option value="Senior Secondary 2">Senior Secondary 2</option>
+                            <option value="Senior Secondary 3">Senior Secondary 3</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="edit-gpa">GPA/Grade:</label>
+                        <input type="number" id="edit-gpa" min="0" max="5" step="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-status">Status:</label>
+                        <select id="edit-status" required>
+                            <option value="Active">Active</option>
+                            <option value="On Leave">On Leave</option>
+                            <option value="Transferred">Transferred</option>
+                            <option value="Graduated">Graduated</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="edit-parent-name">Parent/Guardian Name:</label>
+                        <input type="text" id="edit-parent-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-contact">Contact Number:</label>
+                        <input type="tel" id="edit-contact" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group full-width">
+                        <label for="edit-notes">Notes:</label>
+                        <textarea id="edit-notes" rows="3"></textarea>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                    <button type="button" class="btn btn-secondary" id="close-modal-btn">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- View Modal -->
+    <div id="view-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Student Record Details</h2>
+            <div id="student-details">
+                <!-- Details will be populated here -->
+            </div>
+            <button type="button" class="btn btn-secondary" id="close-view-modal-btn">Close</button>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>&copy; 2026 Student Record Tracker. All rights reserved.</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
