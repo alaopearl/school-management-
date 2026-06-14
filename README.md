@@ -20,7 +20,25 @@ npm install
 npm start
 ```
 
+Copy the environment example and configure your SMTP provider to enable OTP email delivery:
+
+```bash
+cp .env.example .env
+```
+
 The app will run on `http://localhost:5000`.
+
+### OTP email settings
+
+To send OTPs via email, set the following in `.env`:
+
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_USER`
+- `SMTP_PASS`
+- `SMTP_FROM`
+
+If SMTP is not configured, OTPs still work in development and are logged to the console.
 
 ## Render deployment
 

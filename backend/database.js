@@ -57,7 +57,19 @@ const ensureColumn = async (tableName, columnName, definition) => {
     const columns = await getTableColumns(tableName);
     if (!columns.includes(columnName)) {
         console.log(`Adding missing column ${columnName} to table ${tableName}`);
-        await run(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+        try {
+            await run(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+        } catch (err) {
+            if (err.message && err.message.includes('non-constant default')) {
+                const typeOnly = definition.split(' ')[0];
+                await run(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${typeOnly}`);
+                if (columnName === 'created_at' || columnName === 'updated_at') {
+                    await run(`UPDATE ${tableName} SET ${columnName} = CURRENT_TIMESTAMP WHERE ${columnName} IS NULL`);
+                }
+            } else {
+                throw err;
+            }
+        }
     }
 };
 
@@ -69,8 +81,23 @@ const database = {
                 name TEXT NOT NULL,
                 code TEXT UNIQUE NOT NULL,
                 logo_url TEXT,
+                motto TEXT,
+                address TEXT,
+                email TEXT,
+                phone TEXT,
+                website TEXT,
+                principal_name TEXT,
+                principal_phone TEXT,
+                school_type TEXT,
+                primary_color TEXT,
+                secondary_color TEXT,
+                session_system TEXT,
+                status TEXT DEFAULT 'ACTIVE',
+                subscription_plan TEXT DEFAULT 'FREE',
+                subscription_expires_at TEXT,
                 settings TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         `);
 
@@ -237,20 +264,37 @@ const database = {
         `);
 
         await run(`
-            CREATE TABLE IF NOT EXISTS loans (
+            CREATE TABLE IF NOT EXISTS subscription_plans (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                description TEXT,
+                price REAL NOT NULL,
+                max_students INTEGER,
+                max_teachers INTEGER,
+                features TEXT,
+                billing_cycle TEXT DEFAULT 'MONTHLY',
+                status TEXT DEFAULT 'ACTIVE',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        await run(`
+            CREATE TABLE IF NOT EXISTS payments (
                 id TEXT PRIMARY KEY,
                 school_id TEXT NOT NULL,
-                book_id TEXT NOT NULL,
-                borrower_id TEXT NOT NULL,
-                borrower_type TEXT NOT NULL,
-                borrowed_date TEXT NOT NULL,
-                due_date TEXT,
-                returned_date TEXT,
-                fine_amount REAL DEFAULT 0,
-                status TEXT DEFAULT 'BORROWED',
+                student_id TEXT,
+                amount REAL NOT NULL,
+                currency TEXT DEFAULT 'NGN',
+                payment_type TEXT,
+                payment_method TEXT,
+                reference TEXT UNIQUE,
+                status TEXT DEFAULT 'PENDING',
+                receipt_url TEXT,
+                officer_name TEXT,
+                paid_at TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY(school_id) REFERENCES schools(id) ON DELETE CASCADE,
-                FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE
+                FOREIGN KEY(student_id) REFERENCES students(id) ON DELETE SET NULL
             )
         `);
 
@@ -284,17 +328,63 @@ const database = {
         `);
 
         await ensureColumn('users', 'school_id', 'TEXT');
+        await ensureColumn('users', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+        await ensureColumn('users', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+        await ensureColumn('schools', 'motto', 'TEXT');
+        await ensureColumn('schools', 'address', 'TEXT');
+        await ensureColumn('schools', 'email', 'TEXT');
+        await ensureColumn('schools', 'phone', 'TEXT');
+        await ensureColumn('schools', 'website', 'TEXT');
+        await ensureColumn('schools', 'principal_name', 'TEXT');
+        await ensureColumn('schools', 'principal_phone', 'TEXT');
+        await ensureColumn('schools', 'school_type', 'TEXT');
+        await ensureColumn('schools', 'primary_color', 'TEXT');
+        await ensureColumn('schools', 'secondary_color', 'TEXT');
+        await ensureColumn('schools', 'session_system', 'TEXT');
+        await ensureColumn('schools', 'status', 'TEXT DEFAULT ACTIVE');
+        await ensureColumn('schools', 'subscription_plan', 'TEXT');
+        await ensureColumn('schools', 'settings', 'TEXT');
+        await ensureColumn('schools', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+        await ensureColumn('schools', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
         await ensureColumn('classes', 'school_id', 'TEXT');
+        await ensureColumn('classes', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+        await ensureColumn('classes', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
         await ensureColumn('subjects', 'school_id', 'TEXT');
+        await ensureColumn('subjects', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+        await ensureColumn('subjects', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
         await ensureColumn('students', 'school_id', 'TEXT');
+        await ensureColumn('students', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+        await ensureColumn('students', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
         await ensureColumn('teachers', 'school_id', 'TEXT');
+        await ensureColumn('teachers', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+        await ensureColumn('teachers', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
         await ensureColumn('attendance', 'school_id', 'TEXT');
+        await ensureColumn('attendance', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+        await ensureColumn('attendance', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
         await ensureColumn('exams', 'school_id', 'TEXT');
+        await ensureColumn('exams', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+        await ensureColumn('exams', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+        await ensureColumn('results', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+        await ensureColumn('results', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
         await ensureColumn('fees', 'school_id', 'TEXT');
+        await ensureColumn('fees', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+        await ensureColumn('fees', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
         await ensureColumn('books', 'school_id', 'TEXT');
+        await ensureColumn('books', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+        await ensureColumn('books', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
         await ensureColumn('loans', 'school_id', 'TEXT');
+        await ensureColumn('loans', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+        await ensureColumn('loans', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
         await ensureColumn('hostels', 'school_id', 'TEXT');
+        await ensureColumn('hostels', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+        await ensureColumn('hostels', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
         await ensureColumn('transports', 'school_id', 'TEXT');
+        await ensureColumn('transports', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+        await ensureColumn('transports', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+        await ensureColumn('subscription_plans', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+        await ensureColumn('subscription_plans', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+        await ensureColumn('payments', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+        await ensureColumn('payments', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
 
         console.log('Database schema initialized');
     },
@@ -302,8 +392,8 @@ const database = {
     // School operations
     createSchool: function (school) {
         return run(
-            `INSERT INTO schools (id, name, code, logo_url, settings) VALUES (?, ?, ?, ?, ?)`,
-            [school.id, school.name, school.code, school.logo_url, serializeJson(school.settings)]
+            `INSERT INTO schools (id, name, code, logo_url, motto, address, email, phone, website, principal_name, principal_phone, school_type, primary_color, secondary_color, session_system, status, subscription_plan, settings) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [school.id, school.name, school.code, school.logo_url || null, school.motto || null, school.address || null, school.email || null, school.phone || null, school.website || null, school.principal_name || null, school.principal_phone || null, school.school_type || null, school.primary_color || '#3B82F6', school.secondary_color || '#1E40AF', school.session_system || 'TERM', school.status || 'ACTIVE', school.subscription_plan || 'FREE', school.settings]
         ).then(() => this.getSchoolById(school.id));
     },
 
@@ -336,6 +426,10 @@ const database = {
 
     getUserByEmail: function (email) {
         return get('SELECT * FROM users WHERE email = ?', [email]);
+    },
+
+    getSuperAdmin: function () {
+        return get('SELECT * FROM users WHERE role = ? LIMIT 1', ['SUPER_ADMIN']);
     },
 
     getUserById: function (id) {
@@ -532,6 +626,10 @@ const database = {
             fields.push(`${key} = ?`);
             values.push(value);
         }
+        if (fields.length === 0) {
+            return this.getClassById(id);
+        }
+        fields.push('updated_at = CURRENT_TIMESTAMP');
         values.push(id);
         return run(`UPDATE classes SET ${fields.join(', ')} WHERE id = ?`, values).then(() => this.getClassById(id));
     },
@@ -739,6 +837,87 @@ const database = {
             });
         });
     }
+};
+
+// Payments
+database.createPayment = function (payment) {
+    return run(
+        `INSERT INTO payments (id, school_id, student_id, amount, currency, payment_type, payment_method, reference, status, officer_name, paid_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [payment.id, payment.school_id, payment.student_id || null, payment.amount, payment.currency || 'NGN', payment.payment_type || 'FEE', payment.payment_method, payment.reference, payment.status || 'PENDING', payment.officer_name || null, payment.paid_at || null]
+    ).then(() => database.getPaymentById(payment.id));
+};
+
+database.getPaymentById = function (id) {
+    return get('SELECT * FROM payments WHERE id = ?', [id]);
+};
+
+database.listPaymentsBySchool = function (schoolId) {
+    return all('SELECT * FROM payments WHERE school_id = ? ORDER BY paid_at DESC', [schoolId]);
+};
+
+database.getTotalRevenue = function (schoolId) {
+    return get('SELECT SUM(amount) as total FROM payments WHERE school_id = ? AND status = ?', [schoolId, 'COMPLETED']).then(row => row?.total || 0);
+};
+
+database.getTodayPayments = function (schoolId) {
+    const today = new Date().toISOString().split('T')[0];
+    return get('SELECT SUM(amount) as total FROM payments WHERE school_id = ? AND status = ? AND date(paid_at) = ?', [schoolId, 'COMPLETED', today]).then(row => row?.total || 0);
+};
+
+database.getMonthlyRevenue = function (schoolId) {
+    const currentMonth = new Date().toISOString().substring(0, 7);
+    return get('SELECT SUM(amount) as total FROM payments WHERE school_id = ? AND status = ? AND substr(paid_at, 1, 7) = ?', [schoolId, 'COMPLETED', currentMonth]).then(row => row?.total || 0);
+};
+
+database.getOutstandingFees = function (schoolId) {
+    return get('SELECT SUM(amount - paid_amount) as total FROM fees WHERE school_id = ? AND status != ?', [schoolId, 'PAID']).then(row => row?.total || 0);
+};
+
+database.getStudentsOwingFees = function (schoolId) {
+    return all('SELECT DISTINCT s.id, s.full_name, s.student_code, SUM(f.amount - f.paid_amount) as amount_owing FROM students s JOIN fees f ON s.id = f.student_id WHERE f.school_id = ? AND f.status != ? GROUP BY s.id', [schoolId, 'PAID']);
+};
+
+// Subscription Plans
+database.createSubscriptionPlan = function (plan) {
+    return run(
+        `INSERT INTO subscription_plans (id, name, description, price, max_students, max_teachers, features, billing_cycle, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [plan.id, plan.name, plan.description, plan.price, plan.max_students, plan.max_teachers, plan.features, plan.billing_cycle, plan.status || 'ACTIVE']
+    ).then(() => database.getSubscriptionPlanById(plan.id));
+};
+
+database.getSubscriptionPlanById = function (id) {
+    return get('SELECT * FROM subscription_plans WHERE id = ?', [id]);
+};
+
+database.getSubscriptionPlanByName = function (name) {
+    return get('SELECT * FROM subscription_plans WHERE name = ?', [name]);
+};
+
+database.listSubscriptionPlans = function () {
+    return all('SELECT * FROM subscription_plans WHERE status = ? ORDER BY price', ['ACTIVE']);
+};
+
+database.updateSubscriptionPlan = function (id, updates) {
+    const fields = [];
+    const values = [];
+    for (const [key, value] of Object.entries(updates)) {
+        fields.push(`${key} = ?`);
+        values.push(key === 'features' ? serializeJson(value) : value);
+    }
+    values.push(id);
+    return run(`UPDATE subscription_plans SET ${fields.join(', ')} WHERE id = ?`, values).then(() => database.getSubscriptionPlanById(id));
+};
+
+database.updateSchoolSubscription = function (schoolId, updates) {
+    const fields = [];
+    const values = [];
+    fields.push('updated_at = CURRENT_TIMESTAMP');
+    for (const [key, value] of Object.entries(updates)) {
+        fields.push(`${key} = ?`);
+        values.push(value);
+    }
+    values.push(schoolId);
+    return run(`UPDATE schools SET ${fields.join(', ')} WHERE id = ?`, values).then(() => database.getSchoolById(schoolId));
 };
 
 module.exports = database;

@@ -12,6 +12,12 @@ const studentRoutes = require('./routes/students');
 const teacherRoutes = require('./routes/teachers');
 const classRoutes = require('./routes/classes');
 const reportRoutes = require('./routes/reports');
+const paymentRoutes = require('./routes/payments');
+const planRoutes = require('./routes/plans');
+const examRoutes = require('./routes/exams');
+const syllabusRoutes = require('./routes/syllabus');
+const notificationRoutes = require('./routes/notifications');
+const parentPortalRoutes = require('./routes/parent-portal');
 
 const app = express();
 
@@ -42,6 +48,12 @@ app.use('/api/students', studentRoutes);
 app.use('/api/teachers', teacherRoutes);
 app.use('/api/classes', classRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/payments', paymentRoutes);
+app.use('/api/plans', planRoutes);
+app.use('/api/exams', examRoutes);
+app.use('/api/syllabus', syllabusRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/parent-portal', parentPortalRoutes);
 
 app.get('/api/health', (req, res) => {
     res.json({ status: 'OK', timestamp: new Date().toISOString() });

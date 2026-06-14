@@ -1,7 +1,7 @@
 // Student Record Tracker App - API Version
 // ==========================================
 
-const API_BASE_URL = '/api';
+const API_BASE_URL = 'http://localhost:5000/api';
 const USE_BACKEND = true; // Set false to fallback to localStorage if backend is unavailable
 const AUTH_STORAGE_KEY = 'sms_auth_token';
 
@@ -35,12 +35,18 @@ class StudentRecordTracker {
 
         // Authentication
         document.getElementById('login-form').addEventListener('submit', (e) => this.handleLogin(e));
-        document.getElementById('register-form').addEventListener('submit', (e) => this.handleRegister(e));
-        document.getElementById('otp-verification-form').addEventListener('submit', (e) => this.handleOTPVerification(e));
-        document.getElementById('resend-otp-btn').addEventListener('click', () => this.resendOTP());
-        document.getElementById('show-register-btn').addEventListener('click', () => this.showRegisterForm());
+        document.getElementById('login-submit-btn').addEventListener('click', (e) => this.handleLogin(e));
         document.getElementById('show-login-btn').addEventListener('click', () => this.showLoginForm());
+        document.getElementById('show-forgot-password-btn').addEventListener('click', () => this.showForgotPassword());
+        document.getElementById('back-to-login-btn').addEventListener('click', () => this.showLogin());
+        document.getElementById('back-to-login-btn-2').addEventListener('click', () => this.showLogin());
+        document.getElementById('forgot-password-form').addEventListener('submit', (e) => this.handleForgotPassword(e));
+        document.getElementById('reset-password-form').addEventListener('submit', (e) => this.handleResetPassword(e));
         document.getElementById('logout-btn').addEventListener('click', () => this.handleLogout());
+        document.getElementById('admin-school-form').addEventListener('submit', (e) => this.handleAdminCreateSchool(e));
+        document.getElementById('setup-form').addEventListener('submit', (e) => this.handleSetupSuperAdmin(e));
+        document.getElementById('user-management-form').addEventListener('submit', (e) => this.handleCreateUser(e));
+        document.getElementById('user-school-select').addEventListener('change', () => this.renderUserManagement());
 
         // Add Student Form
         document.getElementById('student-form').addEventListener('submit', (e) => this.handleAddStudent(e));
@@ -76,7 +82,12 @@ class StudentRecordTracker {
     async initBackendAuth() {
         this.token = localStorage.getItem(AUTH_STORAGE_KEY);
         if (!this.token) {
-            this.showLogin();
+            const setupStatus = await this.checkSetupStatus();
+            if (setupStatus && !setupStatus.hasSuperAdmin) {
+                this.showSetup();
+            } else {
+                this.showLogin();
+            }
             return;
         }
 
@@ -85,8 +96,92 @@ class StudentRecordTracker {
             this.showApp();
         } catch (error) {
             this.clearAuth();
-            this.showLogin();
+            const setupStatus = await this.checkSetupStatus();
+            if (setupStatus && !setupStatus.hasSuperAdmin) {
+                this.showSetup();
+            } else {
+                this.showLogin();
+            }
         }
+    }
+
+    async checkSetupStatus() {
+        try {
+            const response = await this.makeRequest('/auth/setup-status', 'GET');
+            return response.data || response;
+        } catch (error) {
+            console.warn('Could not determine setup status:', error.message);
+            return { hasSuperAdmin: true };
+        }
+    }
+
+    async handleSetupSuperAdmin(e) {
+        e.preventDefault();
+        const messageEl = document.getElementById('setup-message');
+
+        const fullName = document.getElementById('setup-full-name').value.trim();
+        const email = document.getElementById('setup-email').value.trim();
+        const password = document.getElementById('setup-password').value;
+        const phone = document.getElementById('setup-phone').value.trim();
+
+        if (!fullName || !email || !password) {
+            messageEl.textContent = 'Full name, email, and password are required.';
+            return;
+        }
+
+        try {
+            const response = await this.makeRequest('/auth/setup-super-admin', 'POST', {
+                fullName,
+                email,
+                password,
+                phone
+            });
+            this.setAuthToken(response.data.token);
+            await this.authenticateUser();
+            messageEl.textContent = '';
+            this.showMessage('Super Admin account created successfully!', 'success');
+            this.showApp();
+            this.switchSection('overview');
+        } catch (error) {
+            messageEl.textContent = error.message;
+        }
+    }
+
+    showSetup() {
+        document.getElementById('login-section').style.display = 'block';
+        document.getElementById('login-form-container').classList.add('hidden');
+        document.getElementById('setup-form-container').classList.remove('hidden');
+        document.querySelector('.nav-tabs').style.display = 'none';
+        document.querySelector('.content').style.display = 'none';
+        document.querySelector('.footer')?.classList.add('hidden');
+        document.getElementById('logout-btn').classList.add('hidden');
+        document.getElementById('user-greeting').textContent = 'Not signed in';
+    }
+
+    showLogin() {
+        document.getElementById('login-section').style.display = 'block';
+        document.getElementById('login-form-container').classList.remove('hidden');
+        document.getElementById('forgot-password-form-container').classList.add('hidden');
+        document.getElementById('reset-password-form-container').classList.add('hidden');
+        document.getElementById('setup-form-container').classList.add('hidden');
+        document.querySelector('.nav-tabs').style.display = 'none';
+        document.querySelector('.content').style.display = 'none';
+        document.querySelector('.footer')?.classList.add('hidden');
+        document.getElementById('logout-btn').classList.add('hidden');
+        document.getElementById('user-greeting').textContent = 'Not signed in';
+    }
+
+    showForgotPassword() {
+        document.getElementById('login-section').style.display = 'block';
+        document.getElementById('login-form-container').classList.add('hidden');
+        document.getElementById('forgot-password-form-container').classList.remove('hidden');
+        document.getElementById('reset-password-form-container').classList.add('hidden');
+        document.getElementById('setup-form-container').classList.add('hidden');
+        document.querySelector('.nav-tabs').style.display = 'none';
+        document.querySelector('.content').style.display = 'none';
+        document.querySelector('.footer')?.classList.add('hidden');
+        document.getElementById('logout-btn').classList.add('hidden');
+        document.getElementById('user-greeting').textContent = 'Not signed in';
     }
 
     async authenticateUser() {
@@ -96,6 +191,101 @@ class StudentRecordTracker {
         await this.loadStudentsFromAPI();
         await this.updateDashboard();
         this.updateUserInfo();
+        this.configureNavForRole();
+    }
+
+    async handleForgotPassword(e) {
+        e.preventDefault();
+        const email = document.getElementById('forgot-email').value.trim();
+        const messageEl = document.getElementById('forgot-password-message');
+
+        if (!email) {
+            messageEl.textContent = 'Please enter your email address.';
+            return;
+        }
+
+        try {
+            const response = await this.makeRequest('/auth/forgot-password', 'POST', { email });
+            messageEl.textContent = response.message || 'OTP request sent.';
+            const resetEmail = document.getElementById('reset-email');
+            resetEmail.value = email;
+            this.showResetPassword();
+        } catch (error) {
+            messageEl.textContent = error.message;
+        }
+    }
+
+    async handleResetPassword(e) {
+        e.preventDefault();
+        const email = document.getElementById('reset-email').value.trim();
+        const otp = document.getElementById('reset-otp').value.trim();
+        const newPassword = document.getElementById('reset-password').value;
+        const confirmPassword = document.getElementById('reset-password-confirm').value;
+        const messageEl = document.getElementById('reset-password-message');
+
+        if (!email || !otp || !newPassword || !confirmPassword) {
+            messageEl.textContent = 'All fields are required.';
+            return;
+        }
+
+        if (newPassword !== confirmPassword) {
+            messageEl.textContent = 'Passwords do not match.';
+            return;
+        }
+
+        try {
+            const response = await this.makeRequest('/auth/reset-password', 'POST', {
+                email,
+                otp,
+                newPassword
+            });
+            messageEl.textContent = response.message || 'Password updated successfully.';
+            this.showLogin();
+        } catch (error) {
+            messageEl.textContent = error.message;
+        }
+    }
+
+    showResetPassword() {
+        document.getElementById('login-section').style.display = 'block';
+        document.getElementById('login-form-container').classList.add('hidden');
+        document.getElementById('forgot-password-form-container').classList.add('hidden');
+        document.getElementById('reset-password-form-container').classList.remove('hidden');
+        document.getElementById('setup-form-container').classList.add('hidden');
+        document.querySelector('.nav-tabs').style.display = 'none';
+        document.querySelector('.content').style.display = 'none';
+        document.querySelector('.footer')?.classList.add('hidden');
+        document.getElementById('logout-btn').classList.add('hidden');
+        document.getElementById('user-greeting').textContent = 'Not signed in';
+    }
+
+    configureNavForRole() {
+        const adminBtn = document.getElementById('admin-panel-btn');
+        const userManagementBtn = document.getElementById('user-management-btn');
+        const adminSection = document.getElementById('admin-panel');
+        const userManagementSection = document.getElementById('user-management');
+        const adminBanner = document.getElementById('super-admin-banner');
+        const canManageUsers = ['SUPER_ADMIN', 'SCHOOL_ADMIN'].includes(this.user?.role);
+
+        if (this.user?.role === 'SUPER_ADMIN') {
+            adminBtn.classList.remove('hidden');
+            adminBanner.classList.remove('hidden');
+        } else {
+            adminBtn.classList.add('hidden');
+            adminBanner.classList.add('hidden');
+            if (adminSection && adminSection.classList.contains('active')) {
+                this.switchSection('overview');
+            }
+        }
+
+        if (canManageUsers) {
+            userManagementBtn.classList.remove('hidden');
+        } else {
+            userManagementBtn.classList.add('hidden');
+            if (userManagementSection && userManagementSection.classList.contains('active')) {
+                this.switchSection('overview');
+            }
+        }
     }
 
     async handleLogin(e) {
@@ -161,120 +351,177 @@ class StudentRecordTracker {
 
     showLoginForm() {
         document.getElementById('login-form-container').classList.remove('hidden');
-        document.getElementById('register-form-container').classList.add('hidden');
         document.getElementById('show-login-btn').classList.add('active');
-        document.getElementById('show-register-btn').classList.remove('active');
-    }
-
-    showRegisterForm() {
-        document.getElementById('login-form-container').classList.add('hidden');
-        document.getElementById('register-form-container').classList.remove('hidden');
-        document.getElementById('show-login-btn').classList.remove('active');
-        document.getElementById('show-register-btn').classList.add('active');
-    }
-
-    async handleRegister(e) {
-        e.preventDefault();
-
-        const schoolName = document.getElementById('school-name').value.trim();
-        const schoolCode = document.getElementById('school-code').value.trim();
-        const logoUrl = document.getElementById('logo-url').value.trim();
-        const adminName = document.getElementById('admin-name').value.trim();
-        const adminEmail = document.getElementById('admin-email').value.trim();
-        const adminPassword = document.getElementById('admin-password').value;
-        const adminPasswordConfirm = document.getElementById('admin-password-confirm').value;
-        const messageEl = document.getElementById('register-message');
-
-        if (!schoolName || !schoolCode || !adminName || !adminEmail || !adminPassword || !adminPasswordConfirm) {
-            messageEl.textContent = 'Please complete all required fields.';
-            return;
-        }
-
-        if (adminPassword !== adminPasswordConfirm) {
-            messageEl.textContent = 'Passwords do not match.';
-            return;
-        }
-
-        try {
-            // Send OTP to admin email
-            const otpResponse = await this.makeRequest('/otp/send-otp', 'POST', { email: adminEmail });
-            
-            // Store registration data for use after OTP verification
-            this.pendingRegistration = {
-                schoolName,
-                schoolCode,
-                logoUrl: logoUrl || null,
-                adminName,
-                adminEmail,
-                password: adminPassword
-            };
-
-            messageEl.textContent = '';
-            this.showOTPVerification(adminEmail, otpResponse.otp);
-        } catch (error) {
-            messageEl.textContent = error.message;
-        }
-    }
-
-    showOTPVerification(email, devOtp) {
-        document.getElementById('register-form-container').classList.add('hidden');
-        document.getElementById('otp-verification-container').classList.remove('hidden');
-        document.getElementById('otp-email-display').textContent = `Verification code sent to ${email}${devOtp ? ` (dev: ${devOtp})` : ''}`;
-        document.getElementById('otp-input').value = '';
-        document.getElementById('otp-message').textContent = '';
-    }
-
-    async handleOTPVerification(e) {
-        e.preventDefault();
-
-        if (!this.pendingRegistration) {
-            return;
-        }
-
-        const otp = document.getElementById('otp-input').value.trim();
-        const messageEl = document.getElementById('otp-message');
-
-        if (!otp || otp.length !== 6) {
-            messageEl.textContent = 'Please enter a valid 6-digit OTP.';
-            return;
-        }
-
-        try {
-            const email = this.pendingRegistration.adminEmail;
-            const verifyResponse = await this.makeRequest('/otp/verify-otp', 'POST', { email, otp });
-
-            // After OTP verified, create school and account
-            const response = await this.makeRequest('/auth/register-school', 'POST', this.pendingRegistration);
-
-            this.setAuthToken(response.data.token);
-            await this.authenticateUser();
-            messageEl.textContent = '';
-            this.showMessage('School registered and email verified successfully!', 'success');
-            this.pendingRegistration = null;
-            this.switchSection('overview');
-            this.showApp();
-        } catch (error) {
-            messageEl.textContent = error.message;
-        }
-    }
-
-    async resendOTP() {
-        if (!this.pendingRegistration) {
-            return;
-        }
-
-        try {
-            const email = this.pendingRegistration.adminEmail;
-            const response = await this.makeRequest('/otp/resend-otp', 'POST', { email });
-            document.getElementById('otp-message').textContent = 'New OTP sent to your email.';
-            document.getElementById('otp-input').value = '';
-        } catch (error) {
-            document.getElementById('otp-message').textContent = error.message;
-        }
     }
 
     updateUserInfo() {
-        document.getElementById('user-greeting').textContent = this.user ? `Signed in as ${this.user.full_name}` : 'Not signed in';
+        document.getElementById('user-greeting').textContent = this.user ? `Signed in as ${this.user.full_name} (${this.user.role})` : 'Not signed in';
+    }
+
+    async renderAdminPanel() {
+        if (this.user?.role !== 'SUPER_ADMIN') {
+            this.switchSection('overview');
+            return;
+        }
+
+        const listContainer = document.getElementById('admin-school-list');
+        const messageEl = document.getElementById('admin-panel-message');
+        try {
+            const response = await this.makeRequest('/schools');
+            const schools = response.data || [];
+            if (schools.length === 0) {
+                listContainer.innerHTML = '<p class="login-message">No schools found.</p>';
+                return;
+            }
+
+            listContainer.innerHTML = schools.map((school) => `
+                <div class="admin-school-item">
+                    <h4>${school.name}</h4>
+                    <p><strong>Code:</strong> ${school.code}</p>
+                    <p><strong>Status:</strong> ${school.status || 'N/A'}</p>
+                    <p><strong>Type:</strong> ${school.school_type || 'N/A'}</p>
+                    <p><strong>Principal:</strong> ${school.principal_name || 'N/A'}</p>
+                </div>
+            `).join('');
+            messageEl.textContent = '';
+        } catch (error) {
+            listContainer.innerHTML = '';
+            messageEl.textContent = error.message;
+        }
+    }
+
+    async handleAdminCreateSchool(e) {
+        e.preventDefault();
+        const messageEl = document.getElementById('admin-panel-message');
+
+        const payload = {
+            schoolName: document.getElementById('admin-school-name').value.trim(),
+            schoolCode: document.getElementById('admin-school-code').value.trim(),
+            motto: document.getElementById('admin-school-motto').value.trim(),
+            address: document.getElementById('admin-school-address').value.trim(),
+            email: document.getElementById('admin-school-email').value.trim(),
+            phone: document.getElementById('admin-school-phone').value.trim(),
+            website: document.getElementById('admin-school-website').value.trim(),
+            principalName: document.getElementById('admin-school-principal').value.trim(),
+            principalPhone: null,
+            schoolType: document.getElementById('admin-school-type').value.trim(),
+            logoUrl: null,
+            primaryColor: null,
+            secondaryColor: null,
+            sessionSystem: 'TERM'
+        };
+
+        if (!payload.schoolName || !payload.schoolCode) {
+            messageEl.textContent = 'School name and code are required.';
+            return;
+        }
+
+        try {
+            await this.makeRequest('/auth/create-school', 'POST', payload);
+            messageEl.textContent = 'School created successfully.';
+            document.getElementById('admin-school-form').reset();
+            await this.renderAdminPanel();
+            await this.renderUserManagement();
+        } catch (error) {
+            messageEl.textContent = error.message;
+        }
+    }
+
+    async renderUserManagement() {
+        const userManagementBtn = document.getElementById('user-management-btn');
+        const userManagementSection = document.getElementById('user-management');
+        if (!['SUPER_ADMIN', 'SCHOOL_ADMIN'].includes(this.user?.role)) {
+            if (userManagementSection && userManagementSection.classList.contains('active')) {
+                this.switchSection('overview');
+            }
+            return;
+        }
+
+        const listContainer = document.getElementById('user-management-list');
+        const messageEl = document.getElementById('user-management-message');
+        const schoolSelectWrapper = document.getElementById('user-school-select-wrapper');
+        const schoolSelect = document.getElementById('user-school-select');
+        const isSuperAdmin = this.user.role === 'SUPER_ADMIN';
+
+        try {
+            let schoolId = this.user.school_id;
+
+            if (isSuperAdmin) {
+                schoolSelectWrapper.classList.remove('hidden');
+                const schoolsResponse = await this.makeRequest('/schools');
+                const schools = schoolsResponse.data || [];
+                schoolSelect.innerHTML = `<option value="">Select a school</option>` + schools.map((school) => `
+                    <option value="${school.id}">${school.name} (${school.code})</option>
+                `).join('');
+                schoolId = schoolSelect.value || (schools.length > 0 ? schools[0].id : null);
+                if (schools.length && !schoolSelect.value) {
+                    schoolSelect.value = schoolId;
+                }
+            } else {
+                schoolSelectWrapper.classList.add('hidden');
+                schoolSelect.innerHTML = '';
+            }
+
+            if (!schoolId) {
+                listContainer.innerHTML = '<p class="login-message">Select a school to view staff.</p>';
+                return;
+            }
+
+            const response = await this.makeRequest(`/users?school_id=${schoolId}`);
+            const users = response.data || [];
+            if (users.length === 0) {
+                listContainer.innerHTML = '<p class="login-message">No staff found.</p>';
+            } else {
+                listContainer.innerHTML = users.map((user) => `
+                    <div class="admin-school-item">
+                        <h4>${user.full_name}</h4>
+                        <p><strong>Role:</strong> ${user.role}</p>
+                        <p><strong>Email:</strong> ${user.email}</p>
+                    </div>
+                `).join('');
+            }
+            messageEl.textContent = '';
+        } catch (error) {
+            listContainer.innerHTML = '';
+            messageEl.textContent = error.message;
+        }
+    }
+
+    async handleCreateUser(e) {
+        e.preventDefault();
+        const messageEl = document.getElementById('user-management-message');
+
+        const fullName = document.getElementById('user-full-name').value.trim();
+        const email = document.getElementById('user-email').value.trim();
+        const password = document.getElementById('user-password').value;
+        const role = document.getElementById('user-role').value;
+        const phone = document.getElementById('user-phone').value.trim();
+        const schoolId = this.user.role === 'SUPER_ADMIN' ? document.getElementById('user-school-select').value : undefined;
+
+        if (!fullName || !email || !password || !role) {
+            messageEl.textContent = 'Fill in all required staff fields.';
+            return;
+        }
+        if (this.user.role === 'SUPER_ADMIN' && !schoolId) {
+            messageEl.textContent = 'Select a school first.';
+            return;
+        }
+
+        try {
+            await this.makeRequest('/auth/register-user', 'POST', {
+                fullName,
+                email,
+                password,
+                role,
+                phone,
+                schoolId
+            });
+            messageEl.textContent = 'Staff account created successfully.';
+            document.getElementById('user-management-form').reset();
+            await this.renderUserManagement();
+        } catch (error) {
+            messageEl.textContent = error.message;
+        }
     }
 
     async switchSection(sectionId) {
@@ -287,6 +534,8 @@ class StudentRecordTracker {
         if (sectionId === 'manage') await this.displayRecords();
         if (sectionId === 'overview') await this.updateDashboard();
         if (sectionId === 'reports') await this.generateReports();
+        if (sectionId === 'admin-panel') await this.renderAdminPanel();
+        if (sectionId === 'user-management') await this.renderUserManagement();
     }
 
     async makeRequest(endpoint, method = 'GET', data = null) {

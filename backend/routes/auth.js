@@ -5,6 +5,7 @@ const { v4: uuidv4 } = require('uuid');
 require('dotenv').config();
 
 const db = require('../database');
+const otpService = require('../routes/otp');
 const { authenticateToken, authorizeRoles } = require('../middleware/auth');
 
 const router = express.Router();
@@ -22,11 +23,12 @@ const generateToken = (user) => {
     return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
 };
 
-router.post('/register-school', async (req, res) => {
+// Super Admin only: Create/manage schools
+router.post('/create-school', authenticateToken, authorizeRoles('SUPER_ADMIN'), async (req, res) => {
     try {
-        const { schoolName, schoolCode, logoUrl, adminName, adminEmail, password } = req.body;
-        if (!schoolName || !schoolCode || !adminName || !adminEmail || !password) {
-            return res.status(400).json({ error: 'Missing required registration fields' });
+        const { schoolName, schoolCode, motto, address, email, phone, website, principalName, principalPhone, schoolType, logoUrl, primaryColor, secondaryColor, sessionSystem } = req.body;
+        if (!schoolName || !schoolCode) {
+            return res.status(400).json({ error: 'School name and code are required' });
         }
 
         const existingSchool = await db.getSchoolByCode(schoolCode);
@@ -38,23 +40,118 @@ router.post('/register-school', async (req, res) => {
             id: uuidv4(),
             name: schoolName,
             code: schoolCode,
+            motto: motto || null,
+            address: address || null,
+            email: email || null,
+            phone: phone || null,
+            website: website || null,
+            principal_name: principalName || null,
+            principal_phone: principalPhone || null,
+            school_type: schoolType || null,
             logo_url: logoUrl || null,
+            primary_color: primaryColor || '#3B82F6',
+            secondary_color: secondaryColor || '#1E40AF',
+            session_system: sessionSystem || 'TERM',
+            status: 'ACTIVE',
+            subscription_plan: 'STANDARD',
             settings: JSON.stringify({ theme: 'light', language: 'en' })
         });
 
+        res.status(201).json({ success: true, data: school });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+router.post('/forgot-password', async (req, res) => {
+    try {
+        const { email } = req.body;
+        if (!email) {
+            return res.status(400).json({ error: 'Email is required' });
+        }
+
+        const normalizedEmail = email.toLowerCase();
+        const user = await db.getUserByEmail(normalizedEmail);
+        if (!user) {
+            return res.json({ success: true, message: 'If an account exists, an OTP has been sent to the email.' });
+        }
+
+        const { sent, otp } = await otpService.sendOtpToEmail(normalizedEmail);
+        res.json({
+            success: true,
+            message: sent ? 'OTP sent to your email' : 'OTP generated (check console in development)',
+            otp: process.env.NODE_ENV === 'development' ? otp : undefined
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+router.post('/reset-password', async (req, res) => {
+    try {
+        const { email, otp, newPassword } = req.body;
+        if (!email || !otp || !newPassword) {
+            return res.status(400).json({ error: 'Email, OTP, and new password are required' });
+        }
+
+        const normalizedEmail = email.toLowerCase();
+        const verification = otpService.verifyOtpCode(normalizedEmail, otp);
+        if (!verification.valid) {
+            return res.status(401).json({ error: verification.message });
+        }
+
+        const user = await db.getUserByEmail(normalizedEmail);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const hashedPassword = await bcrypt.hash(newPassword, SALT_ROUNDS);
+        await db.updateUser(user.id, { password: hashedPassword });
+        res.json({ success: true, message: 'Password has been reset successfully' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+router.get('/setup-status', async (req, res) => {
+    try {
+        const superAdmin = await db.getSuperAdmin();
+        res.json({ success: true, hasSuperAdmin: !!superAdmin });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+router.post('/setup-super-admin', async (req, res) => {
+    try {
+        const { fullName, email, password, phone } = req.body;
+        if (!fullName || !email || !password) {
+            return res.status(400).json({ error: 'Full name, email, and password are required' });
+        }
+
+        const existingAdmin = await db.getSuperAdmin();
+        if (existingAdmin) {
+            return res.status(403).json({ error: 'Super Admin already exists' });
+        }
+
+        const normalizedEmail = email.toLowerCase();
+        const existingUser = await db.getUserByEmail(normalizedEmail);
+        if (existingUser) {
+            return res.status(409).json({ error: 'Email already registered' });
+        }
+
         const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
-        const adminUser = await db.createUser({
+        const superAdmin = await db.createUser({
             id: uuidv4(),
-            school_id: school.id,
-            email: adminEmail.toLowerCase(),
+            school_id: null,
+            email: normalizedEmail,
             password: hashedPassword,
-            full_name: adminName,
-            role: 'SCHOOL_ADMIN',
+            full_name: fullName,
+            phone: phone || null,
+            role: 'SUPER_ADMIN',
             status: 'ACTIVE'
         });
 
-        const token = generateToken(adminUser);
-        res.status(201).json({ success: true, data: { school, user: { id: adminUser.id, email: adminUser.email, full_name: adminUser.full_name, role: adminUser.role }, token } });
+        const token = generateToken(superAdmin);
+        res.status(201).json({ success: true, data: { user: superAdmin, token } });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }

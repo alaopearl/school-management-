@@ -13,6 +13,15 @@ const validateClassData = (req, res, next) => {
     next();
 };
 
+const allowedClassFields = ['name', 'arm', 'department', 'teacher_id', 'description'];
+const filterClassUpdates = (updates) => {
+    return Object.fromEntries(
+        Object.entries(updates).filter(
+            ([key, value]) => allowedClassFields.includes(key) && value !== undefined
+        )
+    );
+};
+
 const resolveSchoolContext = (req) => {
     if (req.user.role === 'SUPER_ADMIN') {
         return req.body.school_id || req.query.school_id;
@@ -81,7 +90,14 @@ router.put('/:id', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SCHOOL_ADMI
             return res.status(403).json({ error: 'Access denied' });
         }
 
-        const updates = { ...req.body };
+        const updates = filterClassUpdates(req.body);
+        if (Object.keys(updates).length === 0) {
+            return res.status(400).json({ error: 'No valid class fields to update' });
+        }
+        if (updates.name !== undefined && !updates.name) {
+            return res.status(400).json({ error: 'Class name cannot be empty' });
+        }
+
         const updated = await db.updateClass(req.params.id, updates);
         res.json({ success: true, data: updated });
     } catch (error) {

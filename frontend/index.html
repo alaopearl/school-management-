@@ -26,7 +26,6 @@
             <h2>School Access</h2>
             <div class="auth-switch">
                 <button type="button" id="show-login-btn" class="btn btn-secondary active">Login</button>
-                <button type="button" id="show-register-btn" class="btn btn-secondary">Register School</button>
             </div>
 
             <div id="login-form-container" class="auth-form">
@@ -44,78 +43,93 @@
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button type="submit" class="btn btn-primary">Login</button>
+                        <button type="submit" id="login-submit-btn" class="btn btn-primary">Login</button>
                     </div>
+                    <p><button type="button" id="show-forgot-password-btn" class="btn btn-link">Forgot password?</button></p>
                     <p id="login-message" class="login-message"></p>
                 </form>
             </div>
-
-            <div id="register-form-container" class="auth-form hidden">
-                <form id="register-form" class="form">
+            <div id="forgot-password-form-container" class="auth-form hidden">
+                <h3>Forgot Password</h3>
+                <form id="forgot-password-form" class="form">
                     <div class="form-row">
                         <div class="form-group full-width">
-                            <label for="school-name">School Name:</label>
-                            <input type="text" id="school-name" placeholder="Enter school name" required>
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group full-width">
-                            <label for="school-code">School Code:</label>
-                            <input type="text" id="school-code" placeholder="Unique school code" required>
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group full-width">
-                            <label for="logo-url">Logo URL (optional):</label>
-                            <input type="url" id="logo-url" placeholder="https://example.com/logo.png">
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group full-width">
-                            <label for="admin-name">Admin Full Name:</label>
-                            <input type="text" id="admin-name" placeholder="Enter administrator name" required>
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group full-width">
-                            <label for="admin-email">Admin Email:</label>
-                            <input type="email" id="admin-email" placeholder="Enter administrator email" required>
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group full-width">
-                            <label for="admin-password">Password:</label>
-                            <input type="password" id="admin-password" placeholder="Create a password" required>
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group full-width">
-                            <label for="admin-password-confirm">Confirm Password:</label>
-                            <input type="password" id="admin-password-confirm" placeholder="Confirm your password" required>
+                            <label for="forgot-email">Email Address:</label>
+                            <input type="email" id="forgot-email" placeholder="Enter your email" required>
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button type="submit" class="btn btn-primary">Register School</button>
+                        <button type="submit" class="btn btn-primary">Send OTP</button>
+                        <button type="button" id="back-to-login-btn" class="btn btn-secondary">Back to Login</button>
                     </div>
-                    <p id="register-message" class="login-message"></p>
+                    <p id="forgot-password-message" class="login-message"></p>
                 </form>
             </div>
-
-            <div id="otp-verification-container" class="auth-form hidden">
-                <h3>Verify Your Email</h3>
-                <p style="color: #64748b; margin-bottom: 16px;" id="otp-email-display"></p>
-                <form id="otp-verification-form" class="form">
+            <div id="reset-password-form-container" class="auth-form hidden">
+                <h3>Reset Password</h3>
+                <form id="reset-password-form" class="form">
                     <div class="form-row">
                         <div class="form-group full-width">
-                            <label for="otp-input">Enter OTP (6 digits):</label>
-                            <input type="text" id="otp-input" placeholder="000000" maxlength="6" inputmode="numeric" required>
+                            <label for="reset-email">Email Address:</label>
+                            <input type="email" id="reset-email" placeholder="Enter your email" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group full-width">
+                            <label for="reset-otp">OTP Code:</label>
+                            <input type="text" id="reset-otp" placeholder="Enter the OTP" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group full-width">
+                            <label for="reset-password">New Password:</label>
+                            <input type="password" id="reset-password" placeholder="Enter new password" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group full-width">
+                            <label for="reset-password-confirm">Confirm Password:</label>
+                            <input type="password" id="reset-password-confirm" placeholder="Confirm new password" required>
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button type="submit" class="btn btn-primary">Verify OTP</button>
-                        <button type="button" id="resend-otp-btn" class="btn btn-secondary">Resend OTP</button>
+                        <button type="submit" class="btn btn-primary">Reset Password</button>
+                        <button type="button" id="back-to-login-btn-2" class="btn btn-secondary">Back to Login</button>
                     </div>
-                    <p id="otp-message" class="login-message"></p>
+                    <p id="reset-password-message" class="login-message"></p>
+                </form>
+            </div>
+            <div id="setup-form-container" class="auth-form hidden">
+                <h3>Initial Super Admin Setup</h3>
+                <form id="setup-form" class="form">
+                    <div class="form-row">
+                        <div class="form-group full-width">
+                            <label for="setup-full-name">Full Name:</label>
+                            <input type="text" id="setup-full-name" placeholder="Enter your full name" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group full-width">
+                            <label for="setup-email">Email Address:</label>
+                            <input type="email" id="setup-email" placeholder="Enter your email" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group full-width">
+                            <label for="setup-password">Password:</label>
+                            <input type="password" id="setup-password" placeholder="Create a password" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group full-width">
+                            <label for="setup-phone">Phone Number:</label>
+                            <input type="tel" id="setup-phone" placeholder="Enter your phone number">
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Create Super Admin</button>
+                    </div>
+                    <p id="setup-message" class="login-message"></p>
                 </form>
             </div>
         </section>
@@ -124,11 +138,16 @@
          <!-- this is the navigation -->
         <nav class="nav-tabs">
             <button class="nav-btn active" data-section="overview">Overview</button>
-            <button class="nav-btn" data-section="add-student">Add Student</button>
+            <button class="nav-btn" data-section="add-student" id="add-student-btn">Add Student</button>
+            <button class="nav-btn hidden" data-section="user-management" id="user-management-btn">Staff Management</button>
             <button class="nav-btn" data-section="manage">Manage Records</button>
             <button class="nav-btn" data-section="search">Search</button>
             <button class="nav-btn" data-section="reports">Reports</button>
+            <button class="nav-btn hidden" data-section="admin-panel" id="admin-panel-btn">Admin Panel</button>
         </nav>
+        <div id="super-admin-banner" class="admin-banner hidden">
+            👑 Super Admin mode enabled — use the Admin Panel to manage schools and system-level settings.
+        </div>
 
         <!-- Main Content -->
         <main class="content">
@@ -267,6 +286,71 @@
                         <button type="reset" class="btn btn-secondary">Clear Form</button>
                     </div>
                 </form>
+            </section>
+
+            <!-- User Management Section -->
+            <section id="user-management" class="section">
+                <h2>Staff & User Management</h2>
+                <div class="admin-grid">
+                    <div class="admin-card">
+                        <h3>Create Staff Account</h3>
+                        <form id="user-management-form" class="form">
+                            <div class="form-row hidden" id="user-school-select-wrapper">
+                                <div class="form-group full-width">
+                                    <label for="user-school-select">Select School:</label>
+                                    <select id="user-school-select"></select>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group full-width">
+                                    <label for="user-full-name">Full Name:</label>
+                                    <input type="text" id="user-full-name" placeholder="Enter full name" required>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group full-width">
+                                    <label for="user-email">Email:</label>
+                                    <input type="email" id="user-email" placeholder="Enter staff email" required>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group full-width">
+                                    <label for="user-password">Password:</label>
+                                    <input type="password" id="user-password" placeholder="Create a password" required>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group full-width">
+                                    <label for="user-role">Role:</label>
+                                    <select id="user-role" required>
+                                        <option value="">Select role</option>
+                                        <option value="SCHOOL_ADMIN">School Admin</option>
+                                        <option value="TEACHER">Teacher</option>
+                                        <option value="ACCOUNTANT">Accountant</option>
+                                        <option value="LIBRARIAN">Librarian</option>
+                                        <option value="PARENT">Parent</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group full-width">
+                                    <label for="user-phone">Phone Number:</label>
+                                    <input type="tel" id="user-phone" placeholder="Enter phone number">
+                                </div>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-primary">Create Staff</button>
+                            </div>
+                            <p id="user-management-message" class="login-message"></p>
+                        </form>
+                    </div>
+                    <div class="admin-card">
+                        <h3>School Staff</h3>
+                        <div id="user-management-list" class="admin-list">
+                            <p class="login-message">Select a school and load staff.</p>
+                        </div>
+                    </div>
+                </div>
             </section>
 
             <!-- Manage Records Section -->
@@ -444,6 +528,81 @@
             <button type="button" class="btn btn-secondary" id="close-view-modal-btn">Close</button>
         </div>
     </div>
+
+            <section id="admin-panel" class="section">
+                <h2>Super Admin Panel</h2>
+                <div class="admin-grid">
+                    <div class="admin-card">
+                        <h3>Registered Schools</h3>
+                        <div id="admin-school-list" class="admin-list">
+                            <p class="login-message">Loading schools...</p>
+                        </div>
+                    </div>
+                    <div class="admin-card">
+                        <h3>Create New School</h3>
+                        <form id="admin-school-form" class="form">
+                            <div class="form-row">
+                                <div class="form-group full-width">
+                                    <label for="admin-school-name">School Name:</label>
+                                    <input type="text" id="admin-school-name" placeholder="Enter school name" required>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group full-width">
+                                    <label for="admin-school-code">School Code:</label>
+                                    <input type="text" id="admin-school-code" placeholder="Enter unique school code" required>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group full-width">
+                                    <label for="admin-school-motto">Motto:</label>
+                                    <input type="text" id="admin-school-motto" placeholder="Enter school motto">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group full-width">
+                                    <label for="admin-school-address">Address:</label>
+                                    <input type="text" id="admin-school-address" placeholder="Enter address">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group full-width">
+                                    <label for="admin-school-email">Email:</label>
+                                    <input type="email" id="admin-school-email" placeholder="Enter contact email">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group full-width">
+                                    <label for="admin-school-phone">Phone:</label>
+                                    <input type="tel" id="admin-school-phone" placeholder="Enter phone number">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group full-width">
+                                    <label for="admin-school-website">Website:</label>
+                                    <input type="url" id="admin-school-website" placeholder="https://example.com">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group full-width">
+                                    <label for="admin-school-principal">Principal Name:</label>
+                                    <input type="text" id="admin-school-principal" placeholder="Enter principal name">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group full-width">
+                                    <label for="admin-school-type">School Type:</label>
+                                    <input type="text" id="admin-school-type" placeholder="e.g. Secondary, Primary">
+                                </div>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-primary">Create School</button>
+                            </div>
+                            <p id="admin-panel-message" class="login-message"></p>
+                        </form>
+                    </div>
+                </div>
+            </section>
 
     <footer class="footer">
         <p>&copy; 2026 Student Record Tracker. All rights reserved.</p>

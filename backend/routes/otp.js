@@ -1,5 +1,4 @@
 const express = require('express');
-const crypto = require('crypto');
 require('dotenv').config();
 
 const router = express.Router();
@@ -83,6 +82,13 @@ const verifyAndClearOTP = (email, otp) => {
     return { valid: true, message: 'OTP verified successfully' };
 };
 
+const sendOtpToEmail = async (email) => {
+    const otp = generateOTP();
+    storeOTP(email, otp);
+    const sent = await sendEmailOTP(email, otp);
+    return { sent, otp };
+};
+
 router.post('/send-otp', async (req, res) => {
     try {
         const { email } = req.body;
@@ -138,11 +144,14 @@ router.post('/resend-otp', async (req, res) => {
         const otp = generateOTP();
         storeOTP(email, otp);
 
-        console.log(`[OTP for ${email}]: ${otp}`);
+        const sent = await sendEmailOTP(email, otp);
+        if (!sent) {
+            console.log(`[OTP for ${email}]: ${otp}`);
+        }
 
         res.json({
             success: true,
-            message: 'New OTP sent to your email',
+            message: sent ? 'New OTP sent to your email' : 'New OTP generated (check console in development)',
             otp: process.env.NODE_ENV === 'development' ? otp : undefined
         });
     } catch (error) {
@@ -151,3 +160,6 @@ router.post('/resend-otp', async (req, res) => {
 });
 
 module.exports = router;
+module.exports.sendOtpToEmail = sendOtpToEmail;
+module.exports.verifyOtpCode = verifyAndClearOTP;
+
