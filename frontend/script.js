@@ -18,6 +18,231 @@ class StudentRecordTracker {
         this.init();
     }
 
+    async fetchNotifications() {
+        if (!this.token) return;
+        try {
+            const response = await this.makeRequest('/notifications/inbox', 'GET');
+            this.notifications = response.data || [];
+            this.unreadCount = response.unread || 0;
+            this.renderNotifications();
+        } catch (err) {
+            console.warn('Could not load notifications:', err.message);
+        }
+    }
+
+    async populateRecipientSelect() {
+        const type = document.getElementById('notif-recipient-type')?.value;
+        const select = document.getElementById('notif-recipient-select');
+        if (!select) return;
+        select.innerHTML = '<option value="">-- choose recipient --</option>';
+        try {
+            if (type === 'USER') {
+                // if super admin, ask to choose school first
+                let schoolId = null;
+                if (this.user?.role === 'SUPER_ADMIN') {
+                    schoolId = this.activeSchoolId || this.availableSchools[0]?.id || null;
+                } else {
+                    schoolId = this.user?.school_id;
+                }
+                const usersResp = await this.makeRequest(`/users?school_id=${schoolId}`);
+                const users = usersResp.data || [];
+                users.forEach(u => {
+                    const opt = document.createElement('option');
+                    opt.value = u.id;
+                    opt.textContent = `${u.full_name} <${u.email}>`;
+                    select.appendChild(opt);
+                });
+            } else if (type === 'SCHOOL') {
+                const schoolsResp = await this.makeRequest('/schools');
+                const schools = schoolsResp.data || [];
+                schools.forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s.id;
+                    opt.textContent = `${s.name} (${s.code})`;
+                    select.appendChild(opt);
+                });
+            } else {
+                // ALL - leave select empty
+            }
+        } catch (err) {
+            console.warn('Failed to populate recipients:', err.message);
+        }
+    }
+
+    applyTemplate(key) {
+        const subj = document.getElementById('notif-subject');
+        const msg = document.getElementById('notif-message');
+        if (!subj || !msg) return;
+        if (key === 'welcome') {
+            subj.value = 'Welcome to our School Portal';
+            msg.value = 'Welcome! We are glad to have you. Please login to access your dashboard.';
+        } else if (key === 'fee_reminder') {
+            subj.value = 'Fee Payment Reminder';
+            msg.value = 'This is a friendly reminder to settle outstanding school fees by the due date.';
+        } else if (key === 'event_reminder') {
+            subj.value = 'Upcoming School Event Reminder';
+            msg.value = 'Reminder: A school event is coming up. Please check the calendar for details.';
+        }
+    }
+
+    previewNotification() {
+        const subj = document.getElementById('notif-subject')?.value || '';
+        const msg = document.getElementById('notif-message')?.value || '';
+        alert(`Preview:\n\nSubject: ${subj}\n\nMessage:\n${msg}`);
+    }
+
+    async fetchNotificationHistory() {
+        try {
+            const resp = await this.makeRequest('/notifications/history', 'GET');
+            this.notificationHistory = resp.data || [];
+            this.renderNotificationHistory();
+        } catch (err) {
+            console.warn('Could not load notification history:', err.message);
+        }
+    }
+
+    renderNotificationHistory() {
+        const container = document.getElementById('admin-notif-log');
+        if (!container) return;
+        if (!this.notificationHistory || this.notificationHistory.length === 0) {
+            container.innerHTML = '<p class="login-message">No notifications sent yet.</p>';
+            return;
+        }
+        container.innerHTML = this.notificationHistory.map(n => `
+            <div class="admin-list-item">
+                <strong>${this.escapeHtml(n.subject || n.type || '')}</strong>
+                <div>${this.escapeHtml(n.message || '')}</div>
+                <div class="muted">Channel: ${n.channel} • Status: ${n.status || 'PENDING'} • ${new Date(n.created_at).toLocaleString()}</div>
+            </div>
+        `).join('');
+    }
+
+    renderNotifications() {
+        const countEl = document.getElementById('notification-count');
+        const listEl = document.getElementById('notification-list');
+        if (!listEl || !countEl) return;
+        if (this.unreadCount > 0) {
+            countEl.textContent = this.unreadCount;
+            countEl.classList.remove('hidden');
+        } else {
+            countEl.classList.add('hidden');
+        }
+
+        if (!this.notifications || this.notifications.length === 0) {
+            listEl.innerHTML = '<p class="muted">No notifications</p>';
+            return;
+        }
+
+        listEl.innerHTML = this.notifications.map(n => `
+            <div class="notif-item ${n.read ? 'read' : 'unread'}">
+                <div class="notif-subject">${this.escapeHtml(n.subject || '')}</div>
+                <div class="notif-message">${this.escapeHtml(n.message || '')}</div>
+                <div class="notif-meta">${new Date(n.created_at).toLocaleString()} <button class="btn btn-link small" onclick="app.markNotificationRead('${n.id}')">Mark read</button></div>
+            </div>
+        `).join('');
+    }
+
+    toggleNotificationDropdown() {
+        const dd = document.getElementById('notification-dropdown');
+        if (!dd) return;
+        dd.classList.toggle('hidden');
+        if (!dd.classList.contains('hidden')) {
+            this.fetchNotifications();
+        }
+    }
+
+    async markNotificationRead(id) {
+        try {
+            // Optimistically mark as read in the UI
+            if (this.notifications) {
+                const idx = this.notifications.findIndex(n => n.id === id);
+                if (idx !== -1 && !this.notifications[idx].read) {
+                    this.notifications[idx].read = 1;
+                    this.unreadCount = Math.max(0, (this.unreadCount || 0) - 1);
+                    this.renderNotifications();
+                    this.animateBadge();
+                }
+            }
+
+            // Persist on server
+            await this.makeRequest(`/notifications/${id}/read`, 'POST');
+            // refresh silently
+            this.fetchNotifications().catch(()=>{});
+        } catch (err) {
+            this.showMessage('Could not mark notification read', 'error');
+            // On error, re-fetch to ensure UI consistency
+            this.fetchNotifications().catch(()=>{});
+        }
+    }
+
+    async markAllRead() {
+        if (!this.notifications || this.notifications.length === 0) return;
+        const toMark = this.notifications.filter(n => !n.read).map(n => n.id);
+        if (toMark.length === 0) return;
+        // Optimistically update UI
+        this.notifications.forEach(n => { n.read = 1; });
+        this.unreadCount = 0;
+        this.renderNotifications();
+        this.animateBadge();
+
+        try {
+            await Promise.all(toMark.map(id => this.makeRequest(`/notifications/${id}/read`, 'POST')));
+            // refresh in background
+            this.fetchNotifications().catch(()=>{});
+        } catch (err) {
+            this.showMessage('Failed to mark all read', 'error');
+            // revert by reloading actual state
+            this.fetchNotifications().catch(()=>{});
+        }
+    }
+
+    animateBadge() {
+        const countEl = document.getElementById('notification-count');
+        if (!countEl) return;
+        countEl.classList.add('badge-pop');
+        setTimeout(() => countEl.classList.remove('badge-pop'), 600);
+    }
+
+    async handleSendNotification(e) {
+        e.preventDefault();
+        const recipientType = document.getElementById('notif-recipient-type').value;
+        const recipientId = document.getElementById('notif-recipient-id').value.trim() || null;
+        const recipientEmail = document.getElementById('notif-recipient-email').value.trim() || null;
+        const channel = document.getElementById('notif-channel').value;
+        const subject = document.getElementById('notif-subject').value.trim();
+        const message = document.getElementById('notif-message').value.trim();
+        const msgEl = document.getElementById('notif-message');
+
+        if (!message) {
+            msgEl.textContent = 'Message is required.';
+            return;
+        }
+
+        try {
+            const scheduledAt = document.getElementById('notif-scheduled-at')?.value || null;
+            const payload = {
+                recipientId: recipientId || (recipientType === 'ALL' ? 'ALL' : undefined),
+                recipientType,
+                recipient_email: recipientEmail || undefined,
+                subject: subject || 'Notification from Admin',
+                message,
+                notificationType: 'ADMIN_BROADCAST',
+                channel,
+                scheduled_at: scheduledAt
+            };
+
+            const res = await this.makeRequest('/notifications/send', 'POST', payload);
+            msgEl.textContent = res.message || 'Notification sent.';
+            msgEl.classList.remove('error');
+            msgEl.classList.add('success');
+            // refresh notifications
+            await this.fetchNotifications();
+        } catch (err) {
+            msgEl.textContent = err.message;
+            msgEl.classList.add('error');
+        }
+    }
+
     async init() {
         this.setupEventListeners();
         if (USE_BACKEND) {
@@ -48,10 +273,16 @@ class StudentRecordTracker {
         document.getElementById('admin-school-form').addEventListener('submit', (e) => this.handleAdminCreateSchool(e));
         document.getElementById('setup-form').addEventListener('submit', (e) => this.handleSetupSuperAdmin(e));
         document.getElementById('user-management-form').addEventListener('submit', (e) => this.handleCreateUser(e));
+        document.getElementById('send-notification-form')?.addEventListener('submit', (e) => this.handleSendNotification(e));
+        document.getElementById('notif-recipient-type')?.addEventListener('change', () => this.populateRecipientSelect());
+        document.getElementById('notif-template')?.addEventListener('change', (e) => this.applyTemplate(e.target.value));
+        document.getElementById('notif-preview')?.addEventListener('click', () => this.previewNotification());
         document.getElementById('user-school-select').addEventListener('change', () => this.renderUserManagement());
         document.getElementById('add-school-btn')?.addEventListener('click', () => this.switchSection('admin-panel'));
         document.getElementById('view-schools-btn')?.addEventListener('click', () => this.switchSection('schools'));
         document.getElementById('view-logs-btn')?.addEventListener('click', () => this.switchSection('logs'));
+        document.getElementById('refresh-retries-btn')?.addEventListener('click', () => this.fetchRetries());
+        document.getElementById('test-gateway-btn')?.addEventListener('click', () => this.handleTestGateway());
         // About us and chat
         document.getElementById('about-us-link')?.addEventListener('click', (e) => {
             e.preventDefault();
@@ -99,6 +330,23 @@ class StudentRecordTracker {
         document.getElementById('subscribe-btn')?.addEventListener('click', () => this.handleSubscribe());
         document.getElementById('back-to-top')?.addEventListener('click', () => window.scrollTo({top:0,behavior:'smooth'}));
         document.getElementById('theme-toggle')?.addEventListener('click', () => this.toggleTheme());
+        // Notifications
+        document.getElementById('notification-bell')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.toggleNotificationDropdown();
+        });
+        document.getElementById('mark-all-read')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.markAllRead();
+        });
+        // close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            const dd = document.getElementById('notification-dropdown');
+            if (!dd) return;
+            if (!dd.classList.contains('hidden') && !e.target.closest('.notification-wrapper')) {
+                dd.classList.add('hidden');
+            }
+        });
     }
 
     async handleChatSubmit(e) {
@@ -283,6 +531,85 @@ class StudentRecordTracker {
         await this.updateDashboard();
         this.updateUserInfo();
         this.configureNavForRole();
+        // load notifications for the user
+        await this.fetchNotifications();
+        // initialize real-time socket connection
+        try {
+            this.setupSocket();
+        } catch (err) {
+            console.warn('Socket setup failed:', err.message);
+        }
+    }
+
+    setupSocket() {
+        if (typeof io === 'undefined') return;
+        try {
+            const opts = {};
+            if (this.token) opts.auth = { token: `Bearer ${this.token}` };
+            this.socket = io(undefined, opts);
+            this.socket.on('connect', () => {
+                console.log('Connected to socket server', this.socket.id);
+                // identify to join personal room
+                this.socket.emit('identify', { userId: this.user?.id, schoolId: this.getSchoolContext() });
+                const statusEl = document.getElementById('socket-status');
+                if (statusEl) { statusEl.textContent = '🟢'; statusEl.style.color = 'green'; }
+            });
+
+            this.socket.on('notification', (n) => {
+                try {
+                    this.notifications = this.notifications || [];
+                    // prepend notification
+                    this.notifications.unshift(n);
+                    // update unread count
+                    this.unreadCount = (this.unreadCount || 0) + (n.read ? 0 : 1);
+                    this.renderNotifications();
+                    this.showMessage('New notification received', 'info');
+                } catch (err) {
+                    console.warn('Failed to handle incoming notification:', err.message);
+                }
+            });
+
+            this.socket.on('notification:status', (s) => {
+                this.showToast(`Notification ${s.id} ${s.status}${s.error ? ': ' + s.error : ''}`);
+                if (this.notificationHistory) this.fetchNotificationHistory();
+            });
+
+            this.socket.on('connect_error', (err) => {
+                console.warn('Socket connect error:', err.message);
+                const statusEl = document.getElementById('socket-status');
+                if (statusEl) { statusEl.textContent = '🔴'; statusEl.style.color = '#666'; }
+                this.showToast('Realtime connection error');
+            });
+
+            this.socket.on('disconnect', () => {
+                console.log('Socket disconnected');
+                const statusEl = document.getElementById('socket-status');
+                if (statusEl) { statusEl.textContent = '🔴'; statusEl.style.color = '#666'; }
+                this.showToast('Realtime disconnected');
+            });
+
+            this.socket.on('disconnect', () => {
+                console.log('Socket disconnected');
+            });
+        } catch (err) {
+            console.warn('Socket initialization error:', err.message);
+        }
+    }
+
+    showToast(message, timeout = 5000) {
+        const container = document.getElementById('toast-container');
+        if (!container) return;
+        const el = document.createElement('div');
+        el.className = 'toast-item';
+        el.style.background = 'rgba(0,0,0,0.8)';
+        el.style.color = '#fff';
+        el.style.padding = '8px 12px';
+        el.style.marginTop = '8px';
+        el.style.borderRadius = '6px';
+        el.style.boxShadow = '0 2px 6px rgba(0,0,0,0.3)';
+        el.textContent = message;
+        container.appendChild(el);
+        setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 500); }, timeout);
     }
 
     async loadAvailableSchools() {
@@ -392,7 +719,7 @@ class StudentRecordTracker {
         const logsSection = document.getElementById('logs');
         const addStudentSection = document.getElementById('add-student');
         const adminBanner = document.getElementById('super-admin-banner');
-        const canManageUsers = ['SUPER_ADMIN', 'SCHOOL_ADMIN'].includes(this.user?.role);
+        const canManageUsers = this.user?.role === 'SCHOOL_ADMIN';
 
         if (this.user?.role === 'SUPER_ADMIN') {
             adminBtn.classList.remove('hidden');
@@ -523,8 +850,18 @@ class StudentRecordTracker {
                     <p><strong>Status:</strong> ${school.status || 'N/A'}</p>
                     <p><strong>Type:</strong> ${school.school_type || 'N/A'}</p>
                     <p><strong>Principal:</strong> ${school.principal_name || 'N/A'}</p>
+                    <div style="margin-top:10px; display:flex; gap:8px;">
+                        <button class="btn btn-danger btn-small" onclick="app.deleteSchool('${school.id}')">Delete School</button>
+                        <button class="btn btn-outline btn-small" onclick="app.switchSection('schools');">View Details</button>
+                    </div>
                 </div>
             `).join('');
+            // populate recipient select when admin panel renders
+            setTimeout(() => this.populateRecipientSelect(), 200);
+            // load notification history
+            setTimeout(() => this.fetchNotificationHistory(), 300);
+            // load failed delivery retries
+            setTimeout(() => this.fetchRetries(), 400);
             messageEl.textContent = '';
         } catch (error) {
             listContainer.innerHTML = '';
@@ -556,6 +893,9 @@ class StudentRecordTracker {
                     <p><strong>Phone:</strong> ${school.phone || 'N/A'}</p>
                     <p><strong>Principal:</strong> ${school.principal_name || 'N/A'}</p>
                     <p><strong>Status:</strong> ${school.status || 'N/A'}</p>
+                    <div style="margin-top:10px; display:flex; gap:8px;">
+                        <button class="btn btn-danger btn-small" onclick="app.deleteSchool('${school.id}')">Delete School</button>
+                    </div>
                 </div>
             `).join('');
             messageEl.textContent = '';
@@ -594,6 +934,66 @@ class StudentRecordTracker {
         } catch (error) {
             logsContainer.innerHTML = '';
             messageEl.textContent = error.message;
+        }
+    }
+
+    async fetchRetries() {
+        const container = document.getElementById('admin-retries-list');
+        try {
+            const resp = await this.makeRequest('/notifications/retries', 'GET');
+            const rows = resp.data || [];
+            if (rows.length === 0) {
+                container.innerHTML = '<p class="login-message">No failed deliveries.</p>';
+                return;
+            }
+            container.innerHTML = rows.map(r => `
+                <div class="admin-list-item">
+                    <strong>${this.escapeHtml(r.subject || r.channel || '')}</strong>
+                    <div>${this.escapeHtml(r.message || '')}</div>
+                    <div class="muted">User: ${r.user_id} • Attempts: ${r.attempts} • Error: ${this.escapeHtml(r.error || '')}</div>
+                    <div style="margin-top:6px;"><button class="btn btn-outline btn-small" onclick="app.retryRecipient('${r.id}')">Retry</button> <button class="btn btn-outline btn-small" onclick="app.retryNotification('${r.notification_id}')">Retry All</button></div>
+                </div>
+            `).join('');
+        } catch (err) {
+            container.innerHTML = '';
+            console.warn('Failed to fetch retries:', err.message);
+        }
+    }
+
+    async retryRecipient(recipientId) {
+        try {
+            await this.makeRequest(`/notifications/recipients/${recipientId}/retry`, 'POST');
+            this.showMessage('Recipient scheduled for retry', 'success');
+            await this.fetchRetries();
+        } catch (err) {
+            this.showMessage(err.message, 'error');
+        }
+    }
+
+    async retryNotification(notificationId) {
+        try {
+            await this.makeRequest(`/notifications/${notificationId}/retry`, 'POST');
+            this.showMessage('Notification recipients scheduled for retry', 'success');
+            await this.fetchRetries();
+        } catch (err) {
+            this.showMessage(err.message, 'error');
+        }
+    }
+
+    async handleTestGateway() {
+        const channel = document.getElementById('test-channel').value;
+        const recipient = document.getElementById('test-recipient').value.trim();
+        const subject = document.getElementById('test-subject').value.trim();
+        const message = document.getElementById('test-message').value.trim();
+        const resultEl = document.getElementById('test-gateway-result');
+        if (!recipient || !message) { resultEl.textContent = 'Recipient and message are required.'; return; }
+        try {
+            const resp = await this.makeRequest('/notifications/test', 'POST', { channel, recipient, subject, message });
+            resultEl.textContent = resp.message || 'Test sent.';
+            resultEl.classList.remove('error'); resultEl.classList.add('success');
+        } catch (err) {
+            resultEl.textContent = err.message;
+            resultEl.classList.add('error');
         }
     }
 
@@ -700,6 +1100,18 @@ class StudentRecordTracker {
         } catch (error) {
             listContainer.innerHTML = '';
             messageEl.textContent = error.message;
+        }
+    }
+
+    async deleteSchool(schoolId) {
+        if (!confirm('Are you sure you want to delete this school and all its data?')) return;
+        try {
+            await this.makeRequest(`/schools/${schoolId}`, 'DELETE');
+            this.showMessage('School deleted successfully', 'success');
+            await this.renderAdminPanel();
+            await this.renderSchools();
+        } catch (error) {
+            this.showMessage(error.message, 'error');
         }
     }
 
