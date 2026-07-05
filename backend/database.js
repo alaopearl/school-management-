@@ -327,6 +327,19 @@ const database = {
             )
         `);
 
+        await run(`
+            CREATE TABLE IF NOT EXISTS logs (
+                id TEXT PRIMARY KEY,
+                user_id TEXT,
+                action TEXT NOT NULL,
+                details TEXT,
+                ip TEXT,
+                status INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL
+            )
+        `);
+
         await ensureColumn('users', 'school_id', 'TEXT');
         await ensureColumn('users', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
         await ensureColumn('users', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
@@ -387,6 +400,17 @@ const database = {
         await ensureColumn('payments', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
 
         console.log('Database schema initialized');
+    },
+
+    createLog: function (log) {
+        return run(
+            `INSERT INTO logs (id, user_id, action, details, ip, status, created_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+            [log.id, log.user_id, log.action, log.details, log.ip, log.status]
+        );
+    },
+
+    listLogs: function () {
+        return all('SELECT * FROM logs ORDER BY created_at DESC LIMIT 200');
     },
 
     // School operations

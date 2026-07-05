@@ -86,6 +86,9 @@ const sendOtpToEmail = async (email) => {
     const otp = generateOTP();
     storeOTP(email, otp);
     const sent = await sendEmailOTP(email, otp);
+    if (!sent) {
+        console.warn(`[WARNING] Failed to send OTP email to ${email}. OTP for development: ${otp}`);
+    }
     return { sent, otp };
 };
 

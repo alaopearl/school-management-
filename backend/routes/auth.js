@@ -157,6 +157,72 @@ router.post('/setup-super-admin', async (req, res) => {
     }
 });
 
+// Public endpoint: Register a new school with OTP verification
+router.post('/register-school', async (req, res) => {
+    try {
+        const { schoolName, schoolCode, email, phone, principalName, address, schoolType, otp } = req.body;
+        
+        if (!schoolName || !schoolCode || !email) {
+            return res.status(400).json({ error: 'School name, code, and email are required' });
+        }
+
+        const normalizedEmail = email.toLowerCase();
+        
+        // If OTP is provided, verify it
+        if (otp) {
+            const verification = otpService.verifyOtpCode(normalizedEmail, otp);
+            if (!verification.valid) {
+                return res.status(401).json({ error: verification.message });
+            }
+            
+            // OTP verified, proceed with school creation
+            const existingSchool = await db.getSchoolByCode(schoolCode);
+            if (existingSchool) {
+                return res.status(409).json({ error: 'School code already exists' });
+            }
+
+            const school = await db.createSchool({
+                id: uuidv4(),
+                name: schoolName,
+                code: schoolCode,
+                email: normalizedEmail,
+                phone: phone || null,
+                motto: null,
+                address: address || null,
+                website: null,
+                principal_name: principalName || null,
+                principal_phone: null,
+                school_type: schoolType || null,
+                logo_url: null,
+                primary_color: '#3B82F6',
+                secondary_color: '#1E40AF',
+                session_system: 'TERM',
+                status: 'ACTIVE',
+                subscription_plan: 'STANDARD',
+                settings: JSON.stringify({ theme: 'light', language: 'en' })
+            });
+
+            return res.status(201).json({ 
+                success: true, 
+                message: 'School registered successfully',
+                data: school 
+            });
+        } else {
+            // First step: Send OTP to school email
+            const { sent, otp: generatedOtp } = await otpService.sendOtpToEmail(normalizedEmail);
+            
+            return res.json({
+                success: true,
+                message: sent ? 'OTP sent to your email. Please check your inbox.' : 'OTP generated (check console in development)',
+                requiresOtp: true,
+                otp: process.env.NODE_ENV === 'development' ? generatedOtp : undefined
+            });
+        }
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 router.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;

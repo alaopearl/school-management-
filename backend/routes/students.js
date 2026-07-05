@@ -2,6 +2,7 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const db = require('../database');
 const { authenticateToken, authorizeRoles } = require('../middleware/auth');
+const { sendStudentNotification } = require('../utils/email');
 
 const router = express.Router();
 
@@ -103,6 +104,18 @@ router.post('/', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SCHOOL_ADMIN'
             photo_url: req.body.photo_url,
             graduated_at: req.body.graduated_at
         });
+
+        // Send email notification to Super Admin
+        try {
+            const school = await db.getSchoolById(schoolId);
+            const schoolName = school?.name || 'Unknown School';
+            const currentUserEmail = req.user.email;
+            
+            await sendStudentNotification(schoolName, req.body, currentUserEmail);
+        } catch (emailError) {
+            console.error('Email notification failed (non-blocking):', emailError.message);
+            // Continue without throwing error - this is a non-critical operation
+        }
 
         res.status(201).json({ success: true, data: student });
     } catch (error) {

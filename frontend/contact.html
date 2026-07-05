@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Contact Us - EduManage Pro</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header class="header">
+        <div class="header-top">
+            <div>
+                <h1>Contact Us</h1>
+                <p>We're here to help — reach out to our team.</p>
+            </div>
+            <div class="user-panel">
+                <a href="index.html" class="btn btn-link">Dashboard</a>
+            </div>
+        </div>
+        <nav class="site-nav"><ul>
+            <li><a href="index.html">Home</a></li>
+            <li><a href="about.html">About</a></li>
+            <li><a href="features.html">Features</a></li>
+            <li><a href="pricing.html">Pricing</a></li>
+            <li><a href="blog.html">Blog</a></li>
+            <li><a href="contact.html" class="active">Contact</a></li>
+            <li><a href="help.html">Help Center</a></li>
+        </ul></nav>
+    </header>
+
+    <main class="content">
+        <section class="section active">
+            <h2>Get in Touch</h2>
+            <div class="contact-grid">
+                <div>
+                    <h3>Company Information</h3>
+                    <p><strong>EduManage Pro Ltd.</strong></p>
+                    <p>1 Itunegbe street, lagos</p>
+                    <p>Phone: 07058292660</p>
+                    <p>WhatsApp: 07058292660</p>
+                    <p>Support: school.management.website01@gmail.com</p>
+                    <p>Sales: school.management.website01@gmail.com</p>
+                    <p>Business Hours: Mon — Fri, 9:00 — 17:00</p>
+                    <h4>Find us</h4>
+                    <div class="map-placeholder">Google Maps embed (configure in production)</div>
+                </div>
+
+                <div>
+                    <h3>Contact Form</h3>
+                    <form id="public-contact-form" class="form">
+                        <div class="form-row">
+                            <div class="form-group full-width"><label for="contact-fullname">Full Name</label><input id="contact-fullname" required></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group full-width"><label for="contact-school">School Name</label><input id="contact-school"></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group full-width"><label for="contact-email">Email</label><input id="contact-email" type="email" required></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group full-width"><label for="contact-phone">Phone</label><input id="contact-phone" type="tel"></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group full-width"><label for="contact-subject">Subject</label><input id="contact-subject"></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group full-width"><label for="contact-message">Message</label><textarea id="contact-message" rows="6" required></textarea></div>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn btn-primary" id="contact-send">Send Message</button>
+                            <button type="reset" class="btn btn-secondary">Clear</button>
+                        </div>
+                        <p id="contact-result" class="login-message"></p>
+                    </form>
+                    <div style="margin-top:12px;">
+                        <button id="contact-chat-toggle" class="btn btn-outline">Open Live Chat</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer footer-rich">
+        <div class="footer-grid"><div class="footer-col brand"><h3>EduManage Pro</h3></div></div>
+    </footer>
+
+    <script src="script.js"></script>
+    <script>
+    document.getElementById('public-contact-form').addEventListener('submit', async function(e){
+        e.preventDefault();
+        const name=document.getElementById('contact-fullname').value.trim();
+        const email=document.getElementById('contact-email').value.trim();
+        const message=document.getElementById('contact-message').value.trim();
+        const subject=document.getElementById('contact-subject').value.trim()||'Website Contact';
+        const resEl=document.getElementById('contact-result');
+        resEl.textContent='Sending...';
+        try{
+            const r=await fetch('http://localhost:5000/api/contact',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name, email, subject, message})});
+            if(r.ok){resEl.textContent='Message sent — we will reply soon.'; this.reset();} else {resEl.textContent='Failed to send message.'}
+        }catch(err){resEl.textContent='Error sending message.'}
+    });
+
+    document.getElementById('contact-chat-toggle').addEventListener('click', ()=>{
+        document.getElementById('live-chat').classList.remove('hidden');
+        window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'});
+    });
+    </script>
+</body>
+</html>

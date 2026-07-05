@@ -12,6 +12,8 @@ class StudentRecordTracker {
         this.token = null;
         this.user = null;
         this.school = null;
+        this.availableSchools = [];
+        this.activeSchoolId = null;
         this.pendingRegistration = null;
         this.init();
     }
@@ -47,6 +49,21 @@ class StudentRecordTracker {
         document.getElementById('setup-form').addEventListener('submit', (e) => this.handleSetupSuperAdmin(e));
         document.getElementById('user-management-form').addEventListener('submit', (e) => this.handleCreateUser(e));
         document.getElementById('user-school-select').addEventListener('change', () => this.renderUserManagement());
+        document.getElementById('add-school-btn')?.addEventListener('click', () => this.switchSection('admin-panel'));
+        document.getElementById('view-schools-btn')?.addEventListener('click', () => this.switchSection('schools'));
+        document.getElementById('view-logs-btn')?.addEventListener('click', () => this.switchSection('logs'));
+        // About us and chat
+        document.getElementById('about-us-link')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            document.getElementById('about-modal').classList.add('show');
+        });
+        document.getElementById('chat-toggle')?.addEventListener('click', () => {
+            document.getElementById('live-chat').classList.toggle('hidden');
+        });
+        document.getElementById('chat-close')?.addEventListener('click', () => {
+            document.getElementById('live-chat').classList.add('hidden');
+        });
+        document.getElementById('chat-form')?.addEventListener('submit', (e) => this.handleChatSubmit(e));
 
         // Add Student Form
         document.getElementById('student-form').addEventListener('submit', (e) => this.handleAddStudent(e));
@@ -77,6 +94,75 @@ class StudentRecordTracker {
         // Export and Print
         document.getElementById('export-btn').addEventListener('click', () => this.exportToCSV());
         document.getElementById('print-btn').addEventListener('click', () => this.printReport());
+
+        // Footer utilities
+        document.getElementById('subscribe-btn')?.addEventListener('click', () => this.handleSubscribe());
+        document.getElementById('back-to-top')?.addEventListener('click', () => window.scrollTo({top:0,behavior:'smooth'}));
+        document.getElementById('theme-toggle')?.addEventListener('click', () => this.toggleTheme());
+    }
+
+    async handleChatSubmit(e) {
+        e.preventDefault();
+        const name = document.getElementById('chat-name').value.trim();
+        const email = document.getElementById('chat-email').value.trim();
+        const text = document.getElementById('chat-input').value.trim();
+        if (!name || !email || !text) return;
+
+        // append to chat messages locally
+        const messagesEl = document.getElementById('chat-messages');
+        const el = document.createElement('div');
+        el.className = 'msg';
+        el.innerHTML = `<div class="from">You</div><div class="text">${this.escapeHtml(text)}</div>`;
+        messagesEl.appendChild(el);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+
+        // send to backend public contact endpoint
+        try {
+            await fetch(`${API_BASE_URL}/contact`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, email, subject: 'Website Live Chat', message: text })
+            });
+
+            const reply = document.createElement('div');
+            reply.className = 'msg';
+            reply.innerHTML = `<div class="from">Support</div><div class="text">Thanks ${this.escapeHtml(name)} — your message has been received. Our team will respond via email shortly.</div>`;
+            messagesEl.appendChild(reply);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        } catch (err) {
+            const errorMsg = document.createElement('div');
+            errorMsg.className = 'msg';
+            errorMsg.innerHTML = `<div class="from">System</div><div class="text">Failed to send message. Please try again later.</div>`;
+            messagesEl.appendChild(errorMsg);
+        }
+
+        document.getElementById('chat-input').value = '';
+    }
+
+    async handleSubscribe(){
+        const email = document.getElementById('newsletter-email')?.value.trim();
+        if(!email) { this.showMessage('Enter an email to subscribe', 'warning'); return; }
+        try{
+            // simulate subscribe action
+            await fetch(`${API_BASE_URL}/contact`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name: 'Newsletter', email, subject: 'Newsletter Subscribe', message: 'Subscribe' }) });
+            this.showMessage('Subscribed successfully — check your email', 'success');
+            document.getElementById('newsletter-email').value = '';
+        }catch(err){ this.showMessage('Subscription failed', 'error'); }
+    }
+
+    toggleTheme(){
+        const root = document.documentElement;
+        if(root.classList.contains('dark')){ root.classList.remove('dark'); document.getElementById('theme-toggle').textContent='Dark'; }
+        else { root.classList.add('dark'); document.getElementById('theme-toggle').textContent='Light'; }
+    }
+
+    escapeHtml(str) {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     }
 
     async initBackendAuth() {
@@ -188,10 +274,45 @@ class StudentRecordTracker {
         const response = await this.makeRequest('/auth/me');
         this.user = response.data.user;
         this.school = response.data.school;
+        if (this.user?.role === 'SUPER_ADMIN') {
+            await this.loadAvailableSchools();
+        } else {
+            this.activeSchoolId = this.user?.school_id || null;
+        }
         await this.loadStudentsFromAPI();
         await this.updateDashboard();
         this.updateUserInfo();
         this.configureNavForRole();
+    }
+
+    async loadAvailableSchools() {
+        try {
+            const response = await this.makeRequest('/schools');
+            this.availableSchools = response.data || [];
+            if (!this.activeSchoolId && this.availableSchools.length > 0) {
+                this.activeSchoolId = this.availableSchools[0].id;
+            }
+        } catch (error) {
+            console.warn('Could not load schools for Super Admin:', error.message);
+            this.availableSchools = [];
+        }
+    }
+
+    getSchoolContext() {
+        if (this.user?.role === 'SUPER_ADMIN') {
+            return this.activeSchoolId || this.availableSchools[0]?.id || null;
+        }
+        return this.user?.school_id || null;
+    }
+
+    appendSchoolContext(endpoint, schoolId = null) {
+        const resolvedSchoolId = schoolId || this.getSchoolContext();
+        if (!resolvedSchoolId || this.user?.role !== 'SUPER_ADMIN') {
+            return endpoint;
+        }
+
+        const separator = endpoint.includes('?') ? '&' : '?';
+        return `${endpoint}${separator}school_id=${encodeURIComponent(resolvedSchoolId)}`;
     }
 
     async handleForgotPassword(e) {
@@ -262,17 +383,29 @@ class StudentRecordTracker {
     configureNavForRole() {
         const adminBtn = document.getElementById('admin-panel-btn');
         const userManagementBtn = document.getElementById('user-management-btn');
+        const schoolsBtn = document.getElementById('schools-btn');
+        const logsBtn = document.getElementById('admin-logs-btn');
+        const addStudentBtn = document.getElementById('add-student-btn');
         const adminSection = document.getElementById('admin-panel');
         const userManagementSection = document.getElementById('user-management');
+        const schoolsSection = document.getElementById('schools');
+        const logsSection = document.getElementById('logs');
+        const addStudentSection = document.getElementById('add-student');
         const adminBanner = document.getElementById('super-admin-banner');
         const canManageUsers = ['SUPER_ADMIN', 'SCHOOL_ADMIN'].includes(this.user?.role);
 
         if (this.user?.role === 'SUPER_ADMIN') {
             adminBtn.classList.remove('hidden');
+            schoolsBtn.classList.remove('hidden');
+            logsBtn.classList.remove('hidden');
             adminBanner.classList.remove('hidden');
+            addStudentBtn.classList.add('hidden');
         } else {
             adminBtn.classList.add('hidden');
+            schoolsBtn.classList.add('hidden');
+            logsBtn.classList.add('hidden');
             adminBanner.classList.add('hidden');
+            addStudentBtn.classList.remove('hidden');
             if (adminSection && adminSection.classList.contains('active')) {
                 this.switchSection('overview');
             }
@@ -285,6 +418,15 @@ class StudentRecordTracker {
             if (userManagementSection && userManagementSection.classList.contains('active')) {
                 this.switchSection('overview');
             }
+        }
+        if (schoolsSection && schoolsSection.classList.contains('active') && this.user?.role !== 'SUPER_ADMIN') {
+            this.switchSection('overview');
+        }
+        if (logsSection && logsSection.classList.contains('active') && this.user?.role !== 'SUPER_ADMIN') {
+            this.switchSection('overview');
+        }
+        if (addStudentSection && addStudentSection.classList.contains('active') && this.user?.role === 'SUPER_ADMIN') {
+            this.switchSection('overview');
         }
     }
 
@@ -388,6 +530,80 @@ class StudentRecordTracker {
             listContainer.innerHTML = '';
             messageEl.textContent = error.message;
         }
+    }
+
+    async renderSchools() {
+        if (this.user?.role !== 'SUPER_ADMIN') {
+            this.switchSection('overview');
+            return;
+        }
+
+        const listContainer = document.getElementById('schools-list');
+        const messageEl = document.getElementById('schools-message');
+        try {
+            const response = await this.makeRequest('/schools');
+            const schools = response.data || [];
+            if (schools.length === 0) {
+                listContainer.innerHTML = '<p class="login-message">No schools found.</p>';
+                return;
+            }
+
+            listContainer.innerHTML = schools.map((school) => `
+                <div class="admin-school-item">
+                    <h4>${school.name}</h4>
+                    <p><strong>Code:</strong> ${school.code}</p>
+                    <p><strong>Email:</strong> ${school.email || 'N/A'}</p>
+                    <p><strong>Phone:</strong> ${school.phone || 'N/A'}</p>
+                    <p><strong>Principal:</strong> ${school.principal_name || 'N/A'}</p>
+                    <p><strong>Status:</strong> ${school.status || 'N/A'}</p>
+                </div>
+            `).join('');
+            messageEl.textContent = '';
+        } catch (error) {
+            listContainer.innerHTML = '';
+            messageEl.textContent = error.message;
+        }
+    }
+
+    async renderLogs() {
+        if (this.user?.role !== 'SUPER_ADMIN') {
+            this.switchSection('overview');
+            return;
+        }
+
+        const logsContainer = document.getElementById('logs-list');
+        const messageEl = document.getElementById('logs-message');
+        try {
+            const response = await this.makeRequest('/admin/logs');
+            const logs = response.data || [];
+            if (logs.length === 0) {
+                logsContainer.innerHTML = '<tr><td colspan="5">No activity logs available.</td></tr>';
+                return;
+            }
+
+            logsContainer.innerHTML = logs.map((log) => `
+                <tr>
+                    <td>${new Date(log.created_at).toLocaleString()}</td>
+                    <td>${log.user_id || 'System'}</td>
+                    <td>${log.action}</td>
+                    <td>${log.status || 'N/A'}</td>
+                    <td><pre>${log.details ? this.escapeHtml(log.details) : ''}</pre></td>
+                </tr>
+            `).join('');
+            messageEl.textContent = '';
+        } catch (error) {
+            logsContainer.innerHTML = '';
+            messageEl.textContent = error.message;
+        }
+    }
+
+    escapeHtml(text) {
+        return text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
     }
 
     async handleAdminCreateSchool(e) {
@@ -535,6 +751,8 @@ class StudentRecordTracker {
         if (sectionId === 'overview') await this.updateDashboard();
         if (sectionId === 'reports') await this.generateReports();
         if (sectionId === 'admin-panel') await this.renderAdminPanel();
+        if (sectionId === 'schools') await this.renderSchools();
+        if (sectionId === 'logs') await this.renderLogs();
         if (sectionId === 'user-management') await this.renderUserManagement();
     }
 
@@ -568,7 +786,7 @@ class StudentRecordTracker {
 
     async loadStudentsFromAPI() {
         try {
-            const response = await this.makeRequest('/students');
+            const response = await this.makeRequest(this.appendSchoolContext('/students'));
             this.students = (response.data || []).map((student) => this.normalizeStudent(student));
         } catch (error) {
             console.warn('Backend unavailable, falling back to local storage:', error.message);
@@ -814,7 +1032,7 @@ class StudentRecordTracker {
         try {
             let results;
             if (USE_BACKEND) {
-                const response = await this.makeRequest(`/students/search/query?q=${encodeURIComponent(query)}`);
+                const response = await this.makeRequest(this.appendSchoolContext(`/students/search/query?q=${encodeURIComponent(query)}`));
                 results = response.data || [];
             } else {
                 results = this.students.filter(student =>
@@ -865,7 +1083,7 @@ class StudentRecordTracker {
     async updateDashboard() {
         try {
             if (USE_BACKEND) {
-                const response = await this.makeRequest('/reports/statistics');
+                const response = await this.makeRequest(this.appendSchoolContext('/reports/statistics'));
                 document.getElementById('total-students').textContent = response.data.totalStudents;
                 document.getElementById('active-students').textContent = response.data.activeStudents;
                 document.getElementById('graduated-students').textContent = response.data.graduatedStudents;
@@ -895,7 +1113,7 @@ class StudentRecordTracker {
         let distribution = [];
         if (USE_BACKEND) {
             try {
-                const response = await this.makeRequest('/reports/level-distribution');
+                const response = await this.makeRequest(this.appendSchoolContext('/reports/level-distribution'));
                 distribution = response.data;
             } catch (error) {
                 distribution = [];
@@ -941,7 +1159,7 @@ class StudentRecordTracker {
         try {
             let data = [];
             if (USE_BACKEND) {
-                const response = await this.makeRequest('/reports/gpa-by-level');
+                const response = await this.makeRequest(this.appendSchoolContext('/reports/gpa-by-level'));
                 data = response.data;
             } else {
                 const levels = [
@@ -967,7 +1185,7 @@ class StudentRecordTracker {
         try {
             let data = [];
             if (USE_BACKEND) {
-                const response = await this.makeRequest('/reports/gender-distribution');
+                const response = await this.makeRequest(this.appendSchoolContext('/reports/gender-distribution'));
                 data = response.data;
             } else {
                 const genders = ['Male', 'Female', 'Other'];
@@ -985,7 +1203,7 @@ class StudentRecordTracker {
         try {
             let data = [];
             if (USE_BACKEND) {
-                const response = await this.makeRequest('/reports/status-distribution');
+                const response = await this.makeRequest(this.appendSchoolContext('/reports/status-distribution'));
                 data = response.data;
             } else {
                 const statuses = ['Active', 'On Leave', 'Transferred', 'Graduated'];

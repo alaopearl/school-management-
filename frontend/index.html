@@ -11,15 +11,27 @@
         <!-- Header -->
         <header class="header">
             <div class="header-top">
-                <div>
-                    <h1>📚 Student Record Tracker</h1>
-                    <p>Secure access for school staff and administrators.</p>
+                    <div>
+                        <h1>📚 Student Record Tracker</h1>
+                        <p>Secure access for school staff and administrators.</p>
+                    </div>
+                    <div class="user-panel">
+                        <span id="user-greeting">Not signed in</span>
+                        <button id="logout-btn" class="btn btn-secondary hidden">Logout</button>
+                        <a href="about.html" id="about-us-link" class="btn btn-link">About Us</a>
+                    </div>
                 </div>
-                <div class="user-panel">
-                    <span id="user-greeting">Not signed in</span>
-                    <button id="logout-btn" class="btn btn-secondary hidden">Logout</button>
-                </div>
-            </div>
+                <nav class="site-nav">
+                    <ul>
+                        <li><a href="index.html">Home</a></li>
+                        <li><a href="about.html">About</a></li>
+                        <li><a href="features.html">Features</a></li>
+                        <li><a href="pricing.html">Pricing</a></li>
+                        <li><a href="blog.html">Blog</a></li>
+                        <li><a href="contact.html">Contact</a></li>
+                        <li><a href="help.html">Help Center</a></li>
+                    </ul>
+                </nav>
         </header>
 
         <section id="login-section" class="login-section">
@@ -140,13 +152,20 @@
             <button class="nav-btn active" data-section="overview">Overview</button>
             <button class="nav-btn" data-section="add-student" id="add-student-btn">Add Student</button>
             <button class="nav-btn hidden" data-section="user-management" id="user-management-btn">Staff Management</button>
+            <button class="nav-btn hidden super-admin-only" data-section="schools" id="schools-btn">Schools</button>
             <button class="nav-btn" data-section="manage">Manage Records</button>
             <button class="nav-btn" data-section="search">Search</button>
             <button class="nav-btn" data-section="reports">Reports</button>
             <button class="nav-btn hidden" data-section="admin-panel" id="admin-panel-btn">Admin Panel</button>
+            <button class="nav-btn hidden super-admin-only" data-section="logs" id="admin-logs-btn">Activity Logs</button>
         </nav>
         <div id="super-admin-banner" class="admin-banner hidden">
             👑 Super Admin mode enabled — use the Admin Panel to manage schools and system-level settings.
+            <div class="super-admin-actions hidden">
+                <button type="button" class="btn btn-success" id="add-school-btn">Add School</button>
+                <button type="button" class="btn btn-secondary" id="view-schools-btn">View All Schools</button>
+                <button type="button" class="btn btn-outline" id="view-logs-btn">Activity Logs</button>
+            </div>
         </div>
 
         <!-- Main Content -->
@@ -517,6 +536,37 @@
         </div>
     </div>
 
+    <!-- About Us Modal -->
+    <div id="about-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>About Us</h2>
+            <p>Student Record Tracker helps schools manage student records, reports, and administrative tasks efficiently. For support, contact us using the live chat or email below.</p>
+            <h3>Contact</h3>
+            <p>Email: <a href="mailto:school.management.website01@gmail.com">school.management.website01@gmail.com</a></p>
+            <p>Phone: 07058292660</p>
+            <p>Address: 123 Education Ave, Knowledge City</p>
+        </div>
+    </div>
+
+    <!-- Live Chat Widget -->
+    <div id="live-chat" class="live-chat hidden">
+        <div class="chat-header">
+            <span>Live Support</span>
+            <button id="chat-close" class="btn btn-link">✕</button>
+        </div>
+        <div id="chat-messages" class="chat-messages"></div>
+        <form id="chat-form" class="chat-form">
+            <input type="text" id="chat-name" placeholder="Your name" required>
+            <input type="email" id="chat-email" placeholder="Your email" required>
+            <textarea id="chat-input" placeholder="Type your message..." required></textarea>
+            <div class="chat-actions">
+                <button type="submit" class="btn btn-primary">Send</button>
+            </div>
+        </form>
+    </div>
+    <button id="chat-toggle" class="chat-toggle">💬</button>
+
     <!-- View Modal -->
     <div id="view-modal" class="modal">
         <div class="modal-content">
@@ -604,8 +654,100 @@
                 </div>
             </section>
 
-    <footer class="footer">
-        <p>&copy; 2026 Student Record Tracker. All rights reserved.</p>
+            <section id="schools" class="section">
+                <h2>All Registered Schools</h2>
+                <p class="section-note">Only Super Admin can view the full list of schools registered in the system.</p>
+                <div id="schools-list" class="admin-list">
+                    <p class="login-message">Loading schools...</p>
+                </div>
+                <p id="schools-message" class="login-message"></p>
+            </section>
+
+            <section id="logs" class="section">
+                <h2>Activity Logs</h2>
+                <p class="section-note">Audit trail for Super Admin actions and system requests.</p>
+                <div class="logs-table-wrapper">
+                    <table class="logs-table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>User</th>
+                                <th>Action</th>
+                                <th>Status</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logs-list">
+                            <tr><td colspan="5">Loading logs...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p id="logs-message" class="login-message"></p>
+            </section>
+
+    <footer class="footer footer-rich">
+        <div class="footer-grid">
+            <div class="footer-col brand">
+                <h3>EduManage Pro</h3>
+                <p class="muted">Modern student management for schools — secure, fast, and reliable.</p>
+                <div class="footer-meta">© 2026 EduManage Pro. All Rights Reserved.</div>
+                <div class="footer-powered">Powered by Edumanager. Designed &amp; Developed by Olalekan Abdullahi.</div>
+            </div>
+
+            <div class="footer-col quick-links">
+                <h4>Quick Links</h4>
+                <ul>
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="about.html">About Us</a></li>
+                    <li><a href="features.html">Features</a></li>
+                    <li><a href="pricing.html">Pricing</a></li>
+                    <li><a href="blog.html">Blog</a></li>
+                    <li><a href="contact.html">Contact</a></li>
+                </ul>
+            </div>
+
+            <div class="footer-col resources">
+                <h4>Resources</h4>
+                <ul>
+                    <li><a href="help.html">Help Center</a></li>
+                    <li><a href="about.html">User Guide</a></li>
+                    <li><a href="privacy.html">Privacy Policy</a></li>
+                    <li><a href="terms.html">Terms &amp; Conditions</a></li>
+                    <li><a href="#">API Documentation (coming soon)</a></li>
+                </ul>
+            </div>
+
+                <div class="footer-col contact">
+                <h4>Contact</h4>
+                <p>EduManage Pro Ltd.<br>123 Education Ave, Knowledge City</p>
+                <p>Phone: 07058292660<br>WhatsApp: 07058292660</p>
+                <p>Support: school.management.website01@gmail.com<br>Sales: school.management.website01@gmail.com</p>
+                <div class="socials">
+                    <a href="#">Facebook</a> · <a href="#">Instagram</a> · <a href="#">X</a> · <a href="#">LinkedIn</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer-bottom">
+            <div class="newsletter">
+                <label for="newsletter-email">Subscribe to our newsletter</label>
+                <div class="newsletter-row">
+                    <input id="newsletter-email" type="email" placeholder="Your email address">
+                    <button id="subscribe-btn" class="btn btn-primary">Subscribe</button>
+                </div>
+            </div>
+
+            <div class="footer-utility">
+                <button id="back-to-top" class="btn btn-outline">Back to Top</button>
+                <select id="language-select" class="language-select">
+                    <option value="en">English</option>
+                    <option value="fr">Français</option>
+                </select>
+                <button id="theme-toggle" class="btn btn-outline">Dark</button>
+                <div class="version">v1.0.0</div>
+                <div id="system-status" class="system-status">Status: <span class="ok">Operational</span></div>
+            </div>
+        </div>
     </footer>
 
     <script src="script.js"></script>

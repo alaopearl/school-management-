@@ -2,9 +2,12 @@
 
 ## Features Implemented ✅
 
-### 1. **Super Admin Control** ✅
+### 1. **Super Admin Control & School Registration** ✅
 - **`POST /api/auth/create-school`** - Super Admin only: create schools with full profile
-- **`POST /api/auth/register-school`** - Public: self-registration (pending approval)
+- **`POST /api/auth/register-school`** - Public: 2-step school registration with OTP verification
+  - Step 1: Send email with OTP - POST without `otp` field
+  - Step 2: Verify OTP and create school - POST with `otp` field
+  - OTP is sent to the school's Gmail/email address during registration
 - Schools now include: motto, address, email, phone, website, principal name/phone, school type, logo, colors, subscription plan
 
 ### 2. **School Branding & Profile** ✅
