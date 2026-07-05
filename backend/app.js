@@ -20,6 +20,8 @@ const studentsRoutes = require('./routes/students');
 const syllabusRoutes = require('./routes/syllabus');
 const attendanceRoutes = require('./routes/attendance');
 const notesRoutes = require('./routes/notes');
+const uploadRoutes = require('./routes/upload');
+const path = require('path');
 const teachersRoutes = require('./routes/teachers');
 const usersRoutes = require('./routes/users');
 const adminRoutes = require('./routes/admin');
@@ -74,6 +76,10 @@ app.use('/api/students', studentsRoutes);
 app.use('/api/syllabus', syllabusRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/notes', notesRoutes);
+app.use('/api/upload', uploadRoutes);
+
+// Serve uploaded files
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/api/teachers', teachersRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/admin', adminRoutes);

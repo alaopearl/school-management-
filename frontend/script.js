@@ -285,6 +285,7 @@ class StudentRecordTracker {
         document.getElementById('test-gateway-btn')?.addEventListener('click', () => this.handleTestGateway());
         // Payments, Attendance, Academics handlers
         document.getElementById('payment-form')?.addEventListener('submit', (e) => this.handleRecordPayment(e));
+        document.getElementById('invoice-form')?.addEventListener('submit', (e) => this.handleCreateInvoice(e));
         document.getElementById('attendance-form')?.addEventListener('submit', (e) => this.handleRecordAttendance(e));
         document.getElementById('syllabus-form')?.addEventListener('submit', (e) => this.handleUploadSyllabus(e));
         document.getElementById('note-form')?.addEventListener('submit', (e) => this.handleCreateNote(e));
@@ -418,6 +419,29 @@ class StudentRecordTracker {
         } catch (err) { msgEl.textContent = err.message; }
     }
 
+    async handleCreateInvoice(e) {
+        e.preventDefault();
+        const studentId = document.getElementById('invoice-student').value.trim();
+        const amount = parseFloat(document.getElementById('invoice-amount').value);
+        const dueDate = document.getElementById('invoice-due').value || null;
+        const msgEl = document.getElementById('invoice-message');
+        if (!studentId || !amount) { msgEl.textContent = 'Student and amount required'; return; }
+        try {
+            const res = await this.makeRequest('/fees/invoices', 'POST', { studentId, amount, dueDate });
+            msgEl.textContent = 'Invoice created: ' + (res.data?.invoice_number || res.data?.id || '');
+            this.fetchInvoices();
+        } catch (err) { msgEl.textContent = 'Failed to create invoice: ' + err.message; }
+    }
+
+    async fetchInvoices() {
+        try {
+            const res = await this.makeRequest('/fees/invoices', 'GET');
+            const container = document.getElementById('payments-dashboard');
+            if (!res.data || res.data.length === 0) { container.innerHTML = '<p>No invoices</p>'; return; }
+            container.innerHTML = res.data.map(i => `<div>${i.invoice_number || i.id} • ${i.amount} • ${i.status || i.type || ''}</div>`).join('');
+        } catch (err) { document.getElementById('payments-dashboard').innerHTML = '<p>Unable to load invoices</p>'; }
+    }
+
     async fetchPaymentsDashboard() {
         try {
             const res = await this.makeRequest('/payments/dashboard/summary', 'GET');
@@ -469,7 +493,13 @@ class StudentRecordTracker {
         const msgEl = document.getElementById('syllabus-message');
         if (!title) { msgEl.textContent = 'Title required'; return; }
         try {
-            const res = await this.makeRequest('/syllabus', 'POST', { subjectId, title, content, documentUrl: doc });
+            let documentUrl = doc || null;
+            const fileInput = document.getElementById('syllabus-file');
+            if (fileInput && fileInput.files && fileInput.files[0]) {
+                const uploadRes = await this.uploadFile(fileInput.files[0]);
+                documentUrl = uploadRes.url;
+            }
+            const res = await this.makeRequest('/syllabus', 'POST', { subjectId, title, content, documentUrl });
             msgEl.textContent = res.message || 'Syllabus uploaded';
         } catch (err) { msgEl.textContent = 'Failed to upload syllabus: ' + err.message; }
     }
@@ -484,9 +514,23 @@ class StudentRecordTracker {
         const msgEl = document.getElementById('note-message');
         if (!title || (!content && !doc)) { msgEl.textContent = 'Title and content or document required'; return; }
         try {
-            const res = await this.makeRequest('/notes', 'POST', { subjectId, title, content, documentUrl: doc });
+            let documentUrl = doc || null;
+            const fileInput = document.getElementById('note-file');
+            if (fileInput && fileInput.files && fileInput.files[0]) {
+                const uploadRes = await this.uploadFile(fileInput.files[0]);
+                documentUrl = uploadRes.url;
+            }
+            const res = await this.makeRequest('/notes', 'POST', { subjectId, title, content, documentUrl });
             msgEl.textContent = res.message || 'Note created';
         } catch (err) { msgEl.textContent = 'Failed to create note: ' + err.message; }
+    }
+
+    async uploadFile(file) {
+        const form = new FormData();
+        form.append('file', file);
+        const res = await fetch(`${API_BASE_URL}/upload`, { method: 'POST', headers: { ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}) }, body: form });
+        if (!res.ok) throw new Error('Upload failed');
+        return res.json();
     }
 
     toggleTheme(){
