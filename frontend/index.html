@@ -459,8 +459,15 @@
                             </div>
                             <div class="form-row">
                                 <div class="form-group full-width">
-                                    <label for="attendance-entries">Entries (JSON array):</label>
-                                    <textarea id="attendance-entries" placeholder='[ { "person_id":"id1","status":"PRESENT" } ]' rows="6"></textarea>
+                                    <label>Mark Attendance (per class)</label>
+                                    <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px">
+                                        <button type="button" id="load-students-btn" class="btn btn-secondary">Load Students</button>
+                                        <small class="muted">Click to load students grouped by class for marking</small>
+                                    </div>
+                                    <div id="attendance-marking-area">
+                                        <!-- JS will render class groups and student mark/cancel buttons here -->
+                                    </div>
+                                    <textarea id="attendance-entries" class="hidden" placeholder='[ { "person_id":"id1","status":"PRESENT" } ]' rows="6"></textarea>
                                 </div>
                             </div>
                             <div class="form-actions">

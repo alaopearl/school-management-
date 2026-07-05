@@ -111,4 +111,17 @@ router.delete('/:id', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SCHOOL_A
     }
 });
 
+// Suspend teacher
+router.post('/:id/suspend', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SCHOOL_ADMIN'), async (req, res) => {
+    try {
+        const teacher = await db.getTeacherById(req.params.id);
+        if (!teacher) return res.status(404).json({ error: 'Teacher not found' });
+        if (req.user.role !== 'SUPER_ADMIN' && req.user.school_id !== teacher.school_id) return res.status(403).json({ error: 'Access denied' });
+        const updated = await db.updateTeacher(req.params.id, { status: 'SUSPENDED' });
+        res.json({ success: true, data: updated, message: 'Teacher suspended' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

@@ -47,17 +47,35 @@ router.post('/record', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SCHOOL_
         // Update invoice
         const updated = await db.recordPayment(invoiceId, amount);
 
-        // Generate receipt
+        // Generate receipt and PDF
         const receipt = generateReceipt(updated, payment);
+        const PDFDocument = require('pdfkit');
+        const fs = require('fs');
+        const receiptsDir = require('path').join(__dirname, '..', 'receipts');
+        if (!fs.existsSync(receiptsDir)) fs.mkdirSync(receiptsDir, { recursive: true });
+        const pdfPath = require('path').join(receiptsDir, `${receipt.receiptNumber}.pdf`);
+        try {
+            const doc = new PDFDocument({ size: 'A4', margin: 50 });
+            const stream = fs.createWriteStream(pdfPath);
+            doc.pipe(stream);
+            doc.fontSize(20).text('School Payment Receipt', { align: 'center' });
+            doc.moveDown();
+            doc.fontSize(12).text(`Receipt No: ${receipt.receiptNumber}`);
+            doc.text(`Verification: ${receipt.verificationCode}`);
+            doc.text(`Student: ${receipt.studentName}`);
+            doc.text(`Invoice: ${invoice.invoice_number || invoice.id}`);
+            doc.text(`Amount Paid: ${receipt.amountPaid}`);
+            doc.text(`Payment Method: ${receipt.paymentMethod || payment.payment_method}`);
+            doc.text(`Paid Date: ${receipt.paidDate}`);
+            doc.moveDown();
+            doc.text('Thank you for your payment.', { align: 'center' });
+            doc.end();
+            receipt.receiptUrl = `/receipts/${receipt.receiptNumber}.pdf`;
+        } catch (pdfErr) {
+            console.error('Failed to generate PDF receipt:', pdfErr.message);
+        }
 
-        res.json({
-            success: true,
-            data: {
-                payment,
-                invoice: updated,
-                receipt
-            }
-        });
+        res.json({ success: true, data: { payment, invoice: updated, receipt } });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }

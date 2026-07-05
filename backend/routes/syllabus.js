@@ -20,13 +20,13 @@ router.post('/', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SCHOOL_ADMIN'
             title,
             content: content || null,
             document_url: documentUrl || null,
-            topics: JSON.stringify(topics || []),
+            topics: topics || [],
             completion_percentage: completionPercentage || 0,
-            created_by: req.user.user_id,
-            updated_at: new Date().toISOString()
+            created_by: req.user.user_id
         };
 
-        res.status(201).json({ success: true, data: syllabus, message: 'Syllabus created. Extend database schema to persist.' });
+        const created = await db.createSyllabus(syllabus);
+        res.status(201).json({ success: true, data: created, message: 'Syllabus created' });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -35,7 +35,10 @@ router.post('/', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SCHOOL_ADMIN'
 // List syllabi by subject
 router.get('/subject/:subjectId', authenticateToken, async (req, res) => {
     try {
-        res.json({ success: true, data: [], message: 'Syllabus retrieval endpoint ready for database extension' });
+        const schoolId = req.user.role === 'SUPER_ADMIN' ? req.query.school_id || req.user.school_id : req.user.school_id;
+        const subjectId = req.params.subjectId;
+        const rows = await db.listSyllabiBySubject(schoolId, subjectId);
+        res.json({ success: true, count: rows.length, data: rows });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }

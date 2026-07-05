@@ -48,4 +48,19 @@ router.put('/:id/settings', authenticateToken, async (req, res) => {
     }
 });
 
+// Super Admin only: delete a school
+router.delete('/:id', authenticateToken, authorizeRoles('SUPER_ADMIN'), async (req, res) => {
+    try {
+        const school = await db.getSchoolById(req.params.id);
+        if (!school) {
+            return res.status(404).json({ error: 'School not found' });
+        }
+
+        await db.deleteSchool(req.params.id);
+        res.json({ success: true, message: 'School deleted' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 module.exports = router;

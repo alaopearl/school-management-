@@ -340,6 +340,25 @@ const database = {
             )
         `);
 
+        await run(`
+            CREATE TABLE IF NOT EXISTS notifications (
+                id TEXT PRIMARY KEY,
+                school_id TEXT,
+                recipient_id TEXT,
+                recipient_type TEXT,
+                subject TEXT,
+                message TEXT,
+                type TEXT,
+                channel TEXT,
+                sent_by TEXT,
+                read INTEGER DEFAULT 0,
+                read_at DATETIME,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(school_id) REFERENCES schools(id) ON DELETE CASCADE,
+                FOREIGN KEY(sent_by) REFERENCES users(id) ON DELETE SET NULL
+            )
+        `);
+
         await ensureColumn('users', 'school_id', 'TEXT');
         await ensureColumn('users', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
         await ensureColumn('users', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
@@ -398,6 +417,76 @@ const database = {
         await ensureColumn('subscription_plans', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
         await ensureColumn('payments', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
         await ensureColumn('payments', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+        await ensureColumn('notifications', 'status', "TEXT DEFAULT 'PENDING'");
+        await ensureColumn('notifications', 'error', 'TEXT');
+        await ensureColumn('notifications', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+        await ensureColumn('notifications', 'scheduled_at', 'DATETIME');
+        await ensureColumn('notifications', 'attempts', 'INTEGER DEFAULT 0');
+        await ensureColumn('notifications', 'delivered_at', 'DATETIME');
+
+        await run(`
+            CREATE TABLE IF NOT EXISTS notification_recipients (
+                id TEXT PRIMARY KEY,
+                notification_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                status TEXT DEFAULT 'PENDING',
+                error TEXT,
+                attempts INTEGER DEFAULT 0,
+                delivered_at DATETIME,
+                scheduled_at DATETIME,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(notification_id) REFERENCES notifications(id) ON DELETE CASCADE,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        `);
+
+        await ensureColumn('notification_recipients', 'status', "TEXT DEFAULT 'PENDING'");
+        await ensureColumn('notification_recipients', 'error', 'TEXT');
+        await ensureColumn('notification_recipients', 'attempts', 'INTEGER DEFAULT 0');
+        await ensureColumn('notification_recipients', 'delivered_at', 'DATETIME');
+        await ensureColumn('notification_recipients', 'scheduled_at', 'DATETIME');
+
+        await run(`
+            CREATE TABLE IF NOT EXISTS syllabi (
+                id TEXT PRIMARY KEY,
+                school_id TEXT NOT NULL,
+                subject_id TEXT,
+                title TEXT NOT NULL,
+                content TEXT,
+                document_url TEXT,
+                topics TEXT,
+                completion_percentage REAL DEFAULT 0,
+                created_by TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(school_id) REFERENCES schools(id) ON DELETE CASCADE,
+                FOREIGN KEY(subject_id) REFERENCES subjects(id) ON DELETE SET NULL,
+                FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+            )
+        `);
+
+        await run(`
+            CREATE TABLE IF NOT EXISTS notes (
+                id TEXT PRIMARY KEY,
+                school_id TEXT NOT NULL,
+                subject_id TEXT,
+                title TEXT NOT NULL,
+                content TEXT,
+                document_url TEXT,
+                created_by TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(school_id) REFERENCES schools(id) ON DELETE CASCADE,
+                FOREIGN KEY(subject_id) REFERENCES subjects(id) ON DELETE SET NULL,
+                FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+            )
+        `);
+
+        await ensureColumn('syllabi', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+        await ensureColumn('syllabi', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+        await ensureColumn('notes', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+        await ensureColumn('notes', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
 
         console.log('Database schema initialized');
     },
@@ -411,6 +500,92 @@ const database = {
 
     listLogs: function () {
         return all('SELECT * FROM logs ORDER BY created_at DESC LIMIT 200');
+    },
+
+    // Notifications
+    createNotification: function (n) {
+        return run(
+            `INSERT INTO notifications (id, school_id, recipient_id, recipient_type, subject, message, type, channel, sent_by, scheduled_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [n.id, n.school_id || null, n.recipient_id, n.recipient_type || 'USER', n.subject || 'Notification', n.message, n.type || 'GENERAL', n.channel || 'IN_APP', n.sent_by || null, n.scheduled_at || null]
+        ).then(() => this.getNotificationById(n.id));
+    },
+
+    createNotificationRecipient: function (r) {
+        return run(
+            `INSERT INTO notification_recipients (id, notification_id, user_id, status, error, attempts, scheduled_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [r.id, r.notification_id, r.user_id, r.status || 'PENDING', r.error || null, r.attempts || 0, r.scheduled_at || null]
+        ).then(() => get('SELECT * FROM notification_recipients WHERE id = ?', [r.id]));
+    },
+
+    getNotificationById: function (id) {
+        return get('SELECT * FROM notifications WHERE id = ?', [id]);
+    },
+
+    listNotificationsByUser: function (userId, limit = 100) {
+        // Return notifications targeted at this user. Prefer joined recipient entries
+        // so broadcasts expanded into notification_recipients are visible in inbox.
+        const sql = `SELECT n.*, nr.id as recipient_entry_id, nr.status as recipient_status, nr.delivered_at, nr.attempts, nr.error
+                     FROM notification_recipients nr
+                     JOIN notifications n ON n.id = nr.notification_id
+                     WHERE nr.user_id = ?
+                     ORDER BY nr.created_at DESC
+                     LIMIT ?`;
+        return all(sql, [userId, limit]);
+    },
+
+    markNotificationRead: function (id, userId) {
+        return run('UPDATE notifications SET read = 1, read_at = CURRENT_TIMESTAMP WHERE id = ? AND recipient_id = ?', [id, userId]).then(() => this.getNotificationById(id));
+    },
+
+    getUnreadCountForUser: function (userId) {
+        return get('SELECT COUNT(*) as unread FROM notifications WHERE recipient_id = ? AND read = 0', [userId]);
+    },
+
+    listPendingNotifications: function (limit = 20) {
+        // only notifications that are pending and scheduled_at is null or due
+        return all(`SELECT * FROM notifications WHERE status = ? AND (scheduled_at IS NULL OR scheduled_at <= CURRENT_TIMESTAMP) ORDER BY created_at ASC LIMIT ?`, ['PENDING', limit]);
+    },
+
+    listPendingRecipients: function (limit = 50) {
+        return all(`SELECT nr.*, n.channel, n.subject, n.message, n.school_id, n.sent_by FROM notification_recipients nr JOIN notifications n ON n.id = nr.notification_id WHERE nr.status = ? AND (nr.scheduled_at IS NULL OR nr.scheduled_at <= CURRENT_TIMESTAMP) ORDER BY nr.created_at ASC LIMIT ?`, ['PENDING', limit]);
+    },
+
+    updateNotificationStatus: function (id, status, error = null) {
+        return run('UPDATE notifications SET status = ?, error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [status, error, id]).then(() => this.getNotificationById(id));
+    },
+
+    setNotificationDelivered: function (id) {
+        return run('UPDATE notifications SET status = ?, error = NULL, delivered_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?', ['SENT', id]).then(() => this.getNotificationById(id));
+    },
+
+    rescheduleNotification: function (id, attempts, error, secondsFromNow) {
+        return run(`UPDATE notifications SET attempts = ?, error = ?, scheduled_at = datetime('now', '+${secondsFromNow} seconds'), updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [attempts, error, id]).then(() => this.getNotificationById(id));
+    },
+
+    // recipients helpers
+    getRecipientById: function (id) {
+        return get('SELECT * FROM notification_recipients WHERE id = ?', [id]);
+    },
+
+    updateRecipientStatus: function (id, status, error = null) {
+        return run('UPDATE notification_recipients SET status = ?, error = ?, updated_at = CURRENT_TIMESTAMP, delivered_at = CASE WHEN ? = ? THEN CURRENT_TIMESTAMP ELSE delivered_at END WHERE id = ?', [status, error, status, 'SENT', id]).then(() => this.getRecipientById(id));
+    },
+
+    rescheduleRecipient: function (id, attempts, error, secondsFromNow) {
+        return run(`UPDATE notification_recipients SET attempts = ?, error = ?, scheduled_at = datetime('now', '+${secondsFromNow} seconds'), updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [attempts, error, id]).then(() => this.getRecipientById(id));
+    },
+
+    listRecipientsByNotification: function (notificationId) {
+        return all('SELECT * FROM notification_recipients WHERE notification_id = ? ORDER BY created_at ASC', [notificationId]);
+    },
+
+    listNotificationsBySchool: function (schoolId, limit = 200) {
+        if (!schoolId) return all('SELECT * FROM notifications ORDER BY created_at DESC LIMIT ?', [limit]);
+        return all('SELECT * FROM notifications WHERE school_id = ? ORDER BY created_at DESC LIMIT ?', [schoolId, limit]);
+    },
+
+    listAllNotifications: function (limit = 200) {
+        return all('SELECT * FROM notifications ORDER BY created_at DESC LIMIT ?', [limit]);
     },
 
     // School operations
@@ -431,6 +606,10 @@ const database = {
 
     listSchools: function () {
         return all('SELECT * FROM schools ORDER BY name');
+    },
+
+    deleteSchool: function (id) {
+        return run('DELETE FROM schools WHERE id = ?', [id]);
     },
 
     updateSchoolSettings: function (id, settings) {
@@ -720,6 +899,81 @@ const database = {
         return all(sql, values);
     },
 
+    // Syllabi
+    createSyllabus: function (s) {
+        return run(
+            `INSERT INTO syllabi (id, school_id, subject_id, title, content, document_url, topics, completion_percentage, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [s.id, s.school_id, s.subject_id || null, s.title, s.content || null, s.document_url || null, serializeJson(s.topics || []), s.completion_percentage || 0, s.created_by || null]
+        ).then(() => this.getSyllabusById(s.id));
+    },
+
+    getSyllabusById: function (id) {
+        return get('SELECT * FROM syllabi WHERE id = ?', [id]);
+    },
+
+    listSyllabiBySubject: function (schoolId, subjectId) {
+        return all('SELECT * FROM syllabi WHERE school_id = ? AND subject_id = ? ORDER BY created_at DESC', [schoolId, subjectId]);
+    },
+
+    // Notes
+    createNote: function (n) {
+        return run(
+            `INSERT INTO notes (id, school_id, subject_id, title, content, document_url, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [n.id, n.school_id, n.subject_id || null, n.title, n.content || null, n.document_url || null, n.created_by || null]
+        ).then(() => this.getNoteById(n.id));
+    },
+
+    getNoteById: function (id) {
+        return get('SELECT * FROM notes WHERE id = ?', [id]);
+    },
+
+    listNotesBySubject: function (schoolId, subjectId) {
+        return all('SELECT * FROM notes WHERE school_id = ? AND subject_id = ? ORDER BY created_at DESC', [schoolId, subjectId]);
+    },
+
+    // Attendance helpers: students grouped by class
+    listStudentsGroupedByClass: async function (schoolId) {
+        const classes = await all('SELECT id, name, arm FROM classes WHERE school_id = ? ORDER BY name', [schoolId]);
+        const students = await all('SELECT * FROM students WHERE school_id = ? ORDER BY full_name', [schoolId]);
+        const map = {};
+        for (const c of classes) {
+            map[c.id] = { id: c.id, name: c.name, arm: c.arm, students: [] };
+        }
+        // students without class go to null-group
+        const unassigned = [];
+        for (const s of students) {
+            if (s.class_id && map[s.class_id]) map[s.class_id].students.push(s);
+            else unassigned.push(s);
+        }
+        const result = Object.values(map);
+        if (unassigned.length) result.push({ id: null, name: 'Unassigned', arm: null, students: unassigned });
+        return result;
+    },
+
+    // Attendance summary for a student
+    getStudentAttendanceSummary: async function (studentId) {
+        const student = await this.getStudentById(studentId);
+        if (!student) throw new Error('Student not found');
+        const schoolId = student.school_id;
+        // total sessions: prefer school setting attendance_total_sessions
+        const school = await this.getSchoolById(schoolId);
+        let totalSessions = 0;
+        try {
+            const settings = school && school.settings ? JSON.parse(school.settings) : {};
+            if (settings && settings.attendance_total_sessions) totalSessions = parseInt(settings.attendance_total_sessions, 10) || 0;
+        } catch (e) {
+            totalSessions = 0;
+        }
+        if (!totalSessions) {
+            const row = await get("SELECT COUNT(DISTINCT record_date) as total FROM attendance WHERE school_id = ? AND person_type = 'STUDENT'", [schoolId]);
+            totalSessions = row?.total || 0;
+        }
+        const presentRow = await get("SELECT COUNT(*) as present FROM attendance WHERE person_id = ? AND person_type = 'STUDENT' AND status IN ('MARK','PRESENT','ATTENDED','P')", [studentId]);
+        const present = presentRow?.present || 0;
+        const percentage = totalSessions ? Math.round((present / totalSessions) * 10000) / 100 : 0;
+        return { student_id: studentId, school_id: schoolId, present_count: present, total_sessions: totalSessions, percentage };
+    },
+
     // Exams and results
     createExam: function (exam) {
         return run(
@@ -943,5 +1197,10 @@ database.updateSchoolSubscription = function (schoolId, updates) {
     values.push(schoolId);
     return run(`UPDATE schools SET ${fields.join(', ')} WHERE id = ?`, values).then(() => database.getSchoolById(schoolId));
 };
+
+// expose raw helpers
+database.run = run;
+database.get = get;
+database.all = all;
 
 module.exports = database;

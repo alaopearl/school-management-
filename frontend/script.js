@@ -287,6 +287,7 @@ class StudentRecordTracker {
         document.getElementById('payment-form')?.addEventListener('submit', (e) => this.handleRecordPayment(e));
         document.getElementById('invoice-form')?.addEventListener('submit', (e) => this.handleCreateInvoice(e));
         document.getElementById('attendance-form')?.addEventListener('submit', (e) => this.handleRecordAttendance(e));
+        document.getElementById('load-students-btn')?.addEventListener('click', () => this.loadStudentsForAttendance());
         document.getElementById('syllabus-form')?.addEventListener('submit', (e) => this.handleUploadSyllabus(e));
         document.getElementById('note-form')?.addEventListener('submit', (e) => this.handleCreateNote(e));
         // About us and chat
@@ -416,6 +417,16 @@ class StudentRecordTracker {
             const res = await this.makeRequest('/payments/record', 'POST', { invoiceId, amount, paymentMethod: method });
             msgEl.textContent = 'Payment recorded';
             this.fetchPaymentsDashboard();
+            // if receipt present, show download link
+            if (res.data && res.data.receipt && res.data.receipt.receiptUrl) {
+                const dl = document.createElement('a');
+                dl.href = res.data.receipt.receiptUrl;
+                dl.textContent = 'Download Receipt';
+                dl.className = 'btn btn-link';
+                dl.target = '_blank';
+                msgEl.appendChild(document.createElement('br'));
+                msgEl.appendChild(dl);
+            }
         } catch (err) { msgEl.textContent = err.message; }
     }
 
@@ -467,11 +478,86 @@ class StudentRecordTracker {
         const entriesText = document.getElementById('attendance-entries').value;
         const msgEl = document.getElementById('attendance-message');
         try {
-            const records = JSON.parse(entriesText || '[]');
+            let records = [];
+            // if the attendance-marking-area was used, build records from marks
+            if (this.attendanceMarks && Object.keys(this.attendanceMarks).length > 0) {
+                records = Object.entries(this.attendanceMarks).map(([person_id, status]) => ({ person_id, action: status === 'CANCELLED' ? 'CANCEL' : 'MARK' }));
+            } else {
+                records = JSON.parse(entriesText || '[]');
+            }
             const res = await this.makeRequest('/attendance/record', 'POST', { records, recordDate: date, personType: type });
             msgEl.textContent = `Recorded ${res.created_count || 0} entries`;
             this.fetchRecentAttendance();
         } catch (err) { msgEl.textContent = 'Failed to record attendance: ' + err.message; }
+    }
+
+    // Load students grouped by class for attendance marking
+    async loadStudentsForAttendance() {
+        try {
+            const el = document.getElementById('attendance-marking-area');
+            el.innerHTML = 'Loading...';
+            const res = await this.makeRequest('/attendance/students/grouped', 'GET');
+            const groups = res.data || [];
+            this.attendanceMarks = {}; // reset
+            el.innerHTML = groups.map(g => `
+                <div class="class-group" data-class-id="${g.id}">
+                    <h4>${this.escapeHtml(g.name || 'Class')} ${g.arm ? '('+this.escapeHtml(g.arm)+')' : ''}</h4>
+                    <div class="student-list">
+                        ${ (g.students || []).map(s => `
+                            <div class="student-row" id="student-${s.id}">
+                                <div class="student-name" style="flex:1;cursor:pointer" onclick="app.showStudentAttendance('${s.id}')">${this.escapeHtml(s.full_name)} <small class="muted">${this.escapeHtml(s.student_code || '')}</small></div>
+                                <div class="student-actions">
+                                    <button class="btn btn-success btn-sm" onclick="app.toggleStudentMark('${s.id}','MARK', this)">Mark</button>
+                                    <button class="btn btn-danger btn-sm" onclick="app.toggleStudentMark('${s.id}','CANCEL', this)">Cancel</button>
+                                    <span class="mark-status muted" id="status-${s.id}"></span>
+                                </div>
+                            </div>
+                        `).join('') }
+                    </div>
+                </div>
+            `).join('');
+        } catch (err) {
+            document.getElementById('attendance-marking-area').innerHTML = '<p>Failed to load students: '+err.message+'</p>';
+        }
+    }
+
+    toggleStudentMark(studentId, action, btn) {
+        if (!this.attendanceMarks) this.attendanceMarks = {};
+        if (action === 'CANCEL') {
+            this.attendanceMarks[studentId] = 'CANCELLED';
+        } else {
+            this.attendanceMarks[studentId] = 'PRESENT';
+        }
+        // update UI
+        const statusEl = document.getElementById('status-' + studentId);
+        if (statusEl) statusEl.textContent = this.attendanceMarks[studentId];
+        // highlight buttons
+        try {
+            const row = document.getElementById('student-' + studentId);
+            if (row) {
+                row.querySelectorAll('.btn-sm').forEach(b => b.classList.remove('active'));
+                if (action === 'CANCEL') row.querySelector('.btn-danger')?.classList.add('active');
+                else row.querySelector('.btn-success')?.classList.add('active');
+            }
+        } catch (e) {}
+    }
+
+    async showStudentAttendance(studentId) {
+        try {
+            const res = await this.makeRequest(`/attendance/student/${studentId}/summary`, 'GET');
+            const data = res.data;
+            const modal = document.getElementById('view-modal');
+            const details = document.getElementById('student-details');
+            details.innerHTML = `
+                <p><strong>Student ID:</strong> ${this.escapeHtml(studentId)}</p>
+                <p><strong>Present:</strong> ${data.present_count}</p>
+                <p><strong>Total Sessions:</strong> ${data.total_sessions}</p>
+                <p><strong>Attendance %:</strong> ${data.percentage}%</p>
+            `;
+            modal.classList.add('show');
+        } catch (err) {
+            this.showMessage('Failed to fetch attendance summary: ' + err.message, 'error');
+        }
     }
 
     async fetchRecentAttendance() {
@@ -1230,6 +1316,19 @@ class StudentRecordTracker {
                         <p><strong>Email:</strong> ${user.email}</p>
                     </div>
                 `).join('');
+                // append suspend/delete buttons for each user if allowed
+                const enhanced = users.map(user => `
+                    <div class="admin-school-item">
+                        <h4>${user.full_name}</h4>
+                        <p><strong>Role:</strong> ${user.role}</p>
+                        <p><strong>Email:</strong> ${user.email}</p>
+                        <div style="margin-top:8px">
+                            ${['TEACHER','STUDENT'].includes(user.role) ? `<button class="btn btn-warning btn-small" onclick="app.suspendUser('${user.id}')">Suspend</button>` : ''}
+                            <button class="btn btn-danger btn-small" onclick="app.deleteUserAccount('${user.id}')">Delete</button>
+                        </div>
+                    </div>
+                `).join('');
+                listContainer.innerHTML = enhanced;
             }
             messageEl.textContent = '';
         } catch (error) {
@@ -1456,6 +1555,24 @@ class StudentRecordTracker {
         } catch (error) {
             this.showMessage(error.message, 'error');
         }
+    }
+
+    async suspendUser(userId) {
+        if (!confirm('Suspend this account?')) return;
+        try {
+            await this.makeRequest(`/users/${userId}/suspend`, 'POST');
+            this.showMessage('User suspended', 'success');
+            await this.renderUserManagement();
+        } catch (err) { this.showMessage(err.message, 'error'); }
+    }
+
+    async deleteUserAccount(userId) {
+        if (!confirm('Delete this account? This is irreversible.')) return;
+        try {
+            await this.makeRequest(`/users/${userId}`, 'DELETE');
+            this.showMessage('User deleted', 'success');
+            await this.renderUserManagement();
+        } catch (err) { this.showMessage(err.message, 'error'); }
     }
 
     editStudent(studentId) {
