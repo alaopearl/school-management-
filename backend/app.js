@@ -18,10 +18,13 @@ const reportsRoutes = require('./routes/reports');
 const schoolsRoutes = require('./routes/schools');
 const studentsRoutes = require('./routes/students');
 const syllabusRoutes = require('./routes/syllabus');
+const attendanceRoutes = require('./routes/attendance');
+const notesRoutes = require('./routes/notes');
 const teachersRoutes = require('./routes/teachers');
 const usersRoutes = require('./routes/users');
 const adminRoutes = require('./routes/admin');
 const contactRoutes = require('./routes/contact');
+const notificationWorker = require('./workers/notificationWorker');
 
 const app = express();
 
@@ -69,6 +72,8 @@ app.use('/api/reports', reportsRoutes);
 app.use('/api/schools', schoolsRoutes);
 app.use('/api/students', studentsRoutes);
 app.use('/api/syllabus', syllabusRoutes);
+app.use('/api/attendance', attendanceRoutes);
+app.use('/api/notes', notesRoutes);
 app.use('/api/teachers', teachersRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/admin', adminRoutes);

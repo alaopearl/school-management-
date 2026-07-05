@@ -283,6 +283,11 @@ class StudentRecordTracker {
         document.getElementById('view-logs-btn')?.addEventListener('click', () => this.switchSection('logs'));
         document.getElementById('refresh-retries-btn')?.addEventListener('click', () => this.fetchRetries());
         document.getElementById('test-gateway-btn')?.addEventListener('click', () => this.handleTestGateway());
+        // Payments, Attendance, Academics handlers
+        document.getElementById('payment-form')?.addEventListener('submit', (e) => this.handleRecordPayment(e));
+        document.getElementById('attendance-form')?.addEventListener('submit', (e) => this.handleRecordAttendance(e));
+        document.getElementById('syllabus-form')?.addEventListener('submit', (e) => this.handleUploadSyllabus(e));
+        document.getElementById('note-form')?.addEventListener('submit', (e) => this.handleCreateNote(e));
         // About us and chat
         document.getElementById('about-us-link')?.addEventListener('click', (e) => {
             e.preventDefault();
@@ -396,6 +401,92 @@ class StudentRecordTracker {
             this.showMessage('Subscribed successfully — check your email', 'success');
             document.getElementById('newsletter-email').value = '';
         }catch(err){ this.showMessage('Subscription failed', 'error'); }
+    }
+
+    // Payments
+    async handleRecordPayment(e) {
+        e.preventDefault();
+        const invoiceId = document.getElementById('payment-invoice').value.trim();
+        const amount = parseFloat(document.getElementById('payment-amount').value);
+        const method = document.getElementById('payment-method').value;
+        const msgEl = document.getElementById('payment-message');
+        if (!invoiceId || !amount) { msgEl.textContent = 'Invoice and amount required'; return; }
+        try {
+            const res = await this.makeRequest('/payments/record', 'POST', { invoiceId, amount, paymentMethod: method });
+            msgEl.textContent = 'Payment recorded';
+            this.fetchPaymentsDashboard();
+        } catch (err) { msgEl.textContent = err.message; }
+    }
+
+    async fetchPaymentsDashboard() {
+        try {
+            const res = await this.makeRequest('/payments/dashboard/summary', 'GET');
+            const el = document.getElementById('payments-dashboard');
+            if (!res.data) { el.innerHTML = '<p>No data</p>'; return; }
+            const d = res.data;
+            el.innerHTML = `
+                <div>Total Revenue: ${d.totalRevenue || 0}</div>
+                <div>Today: ${d.todayPayments || 0}</div>
+                <div>Monthly: ${d.monthlyRevenue || 0}</div>
+                <div>Outstanding: ${d.outstandingFees || 0}</div>
+            `;
+        } catch (err) {
+            const el = document.getElementById('payments-dashboard'); el.innerHTML = '<p>Unable to load dashboard</p>';
+        }
+    }
+
+    // Attendance
+    async handleRecordAttendance(e) {
+        e.preventDefault();
+        const date = document.getElementById('attendance-date').value;
+        const type = document.getElementById('attendance-type').value;
+        const entriesText = document.getElementById('attendance-entries').value;
+        const msgEl = document.getElementById('attendance-message');
+        try {
+            const records = JSON.parse(entriesText || '[]');
+            const res = await this.makeRequest('/attendance/record', 'POST', { records, recordDate: date, personType: type });
+            msgEl.textContent = `Recorded ${res.created_count || 0} entries`;
+            this.fetchRecentAttendance();
+        } catch (err) { msgEl.textContent = 'Failed to record attendance: ' + err.message; }
+    }
+
+    async fetchRecentAttendance() {
+        try {
+            const res = await this.makeRequest('/attendance', 'GET');
+            const el = document.getElementById('attendance-list');
+            if (!res.data || res.data.length === 0) { el.innerHTML = '<p>No attendance records</p>'; return; }
+            el.innerHTML = res.data.slice(0,20).map(a => `<div>${a.record_date} • ${a.person_type} • ${a.person_id} • ${a.status}</div>`).join('');
+        } catch (err) { document.getElementById('attendance-list').innerHTML = '<p>Unable to load attendance</p>'; }
+    }
+
+    // Syllabus
+    async handleUploadSyllabus(e) {
+        e.preventDefault();
+        const subjectId = document.getElementById('syllabus-subject').value.trim();
+        const title = document.getElementById('syllabus-title').value.trim();
+        const content = document.getElementById('syllabus-content').value.trim();
+        const doc = document.getElementById('syllabus-doc').value.trim();
+        const msgEl = document.getElementById('syllabus-message');
+        if (!title) { msgEl.textContent = 'Title required'; return; }
+        try {
+            const res = await this.makeRequest('/syllabus', 'POST', { subjectId, title, content, documentUrl: doc });
+            msgEl.textContent = res.message || 'Syllabus uploaded';
+        } catch (err) { msgEl.textContent = 'Failed to upload syllabus: ' + err.message; }
+    }
+
+    // Notes
+    async handleCreateNote(e) {
+        e.preventDefault();
+        const subjectId = document.getElementById('note-subject').value.trim();
+        const title = document.getElementById('note-title').value.trim();
+        const content = document.getElementById('note-content').value.trim();
+        const doc = document.getElementById('note-doc').value.trim();
+        const msgEl = document.getElementById('note-message');
+        if (!title || (!content && !doc)) { msgEl.textContent = 'Title and content or document required'; return; }
+        try {
+            const res = await this.makeRequest('/notes', 'POST', { subjectId, title, content, documentUrl: doc });
+            msgEl.textContent = res.message || 'Note created';
+        } catch (err) { msgEl.textContent = 'Failed to create note: ' + err.message; }
     }
 
     toggleTheme(){

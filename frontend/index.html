@@ -16,7 +16,15 @@
                         <p>Secure access for school staff and administrators.</p>
                     </div>
                     <div class="user-panel">
+                        <div class="notification-wrapper">
+                            <button id="notification-bell" class="btn btn-link">🔔 <span id="notification-count" class="notif-count hidden">0</span></button>
+                            <div id="notification-dropdown" class="notification-dropdown hidden">
+                                <div class="notif-header">Notifications <button id="mark-all-read" class="btn btn-link small">Mark all read</button></div>
+                                <div id="notification-list" class="notification-list">Loading...</div>
+                            </div>
+                        </div>
                         <span id="user-greeting">Not signed in</span>
+                        <span id="socket-status" title="Realtime status" style="margin-left:8px; font-size:0.9em; color:#666">🔴</span>
                         <button id="logout-btn" class="btn btn-secondary hidden">Logout</button>
                         <a href="about.html" id="about-us-link" class="btn btn-link">About Us</a>
                     </div>
@@ -156,6 +164,9 @@
             <button class="nav-btn" data-section="manage">Manage Records</button>
             <button class="nav-btn" data-section="search">Search</button>
             <button class="nav-btn" data-section="reports">Reports</button>
+            <button class="nav-btn" data-section="payments">Payments</button>
+            <button class="nav-btn" data-section="attendance">Attendance</button>
+            <button class="nav-btn" data-section="academics">Academics</button>
             <button class="nav-btn hidden" data-section="admin-panel" id="admin-panel-btn">Admin Panel</button>
             <button class="nav-btn hidden super-admin-only" data-section="logs" id="admin-logs-btn">Activity Logs</button>
         </nav>
@@ -368,6 +379,137 @@
                         <div id="user-management-list" class="admin-list">
                             <p class="login-message">Select a school and load staff.</p>
                         </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Payments Section -->
+            <section id="payments" class="section">
+                <h2>Payments</h2>
+                <div class="admin-grid">
+                    <div class="admin-card">
+                        <h3>Record Payment</h3>
+                        <form id="payment-form" class="form">
+                            <div class="form-row">
+                                <div class="form-group full-width">
+                                    <label for="payment-invoice">Invoice ID:</label>
+                                    <input type="text" id="payment-invoice" placeholder="Invoice ID" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="payment-amount">Amount:</label>
+                                    <input type="number" id="payment-amount" placeholder="Amount" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="payment-method">Method:</label>
+                                    <select id="payment-method"><option value="CASH">Cash</option><option value="BANK">Bank</option><option value="CARD">Card</option></select>
+                                </div>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-primary">Record Payment</button>
+                            </div>
+                            <p id="payment-message" class="login-message"></p>
+                        </form>
+                    </div>
+                    <div class="admin-card">
+                        <h3>Payments Dashboard</h3>
+                        <div id="payments-dashboard">Loading...</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Attendance Section -->
+            <section id="attendance" class="section">
+                <h2>Attendance</h2>
+                <div class="admin-grid">
+                    <div class="admin-card">
+                        <h3>Record Attendance</h3>
+                        <form id="attendance-form" class="form">
+                            <div class="form-row">
+                                <div class="form-group full-width">
+                                    <label for="attendance-date">Date:</label>
+                                    <input type="date" id="attendance-date" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="attendance-type">Person Type:</label>
+                                    <select id="attendance-type"><option value="STUDENT">Student</option><option value="TEACHER">Teacher</option></select>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group full-width">
+                                    <label for="attendance-entries">Entries (JSON array):</label>
+                                    <textarea id="attendance-entries" placeholder='[ { "person_id":"id1","status":"PRESENT" } ]' rows="6"></textarea>
+                                </div>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-primary">Submit Attendance</button>
+                            </div>
+                            <p id="attendance-message" class="login-message"></p>
+                        </form>
+                    </div>
+                    <div class="admin-card">
+                        <h3>Recent Attendance</h3>
+                        <div id="attendance-list">No records yet.</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Academics Section (Subjects / Syllabus / Notes) -->
+            <section id="academics" class="section">
+                <h2>Academics</h2>
+                <div class="admin-grid">
+                    <div class="admin-card">
+                        <h3>Upload Syllabus</h3>
+                        <form id="syllabus-form" class="form">
+                            <div class="form-row">
+                                <div class="form-group full-width">
+                                    <label for="syllabus-subject">Subject ID:</label>
+                                    <input type="text" id="syllabus-subject" placeholder="Subject ID">
+                                </div>
+                                <div class="form-group full-width">
+                                    <label for="syllabus-title">Title:</label>
+                                    <input type="text" id="syllabus-title" placeholder="Syllabus title" required>
+                                </div>
+                                <div class="form-group full-width">
+                                    <label for="syllabus-content">Content / Notes:</label>
+                                    <textarea id="syllabus-content" rows="6"></textarea>
+                                </div>
+                                <div class="form-group full-width">
+                                    <label for="syllabus-doc">Document URL (optional):</label>
+                                    <input type="text" id="syllabus-doc" placeholder="https://...">
+                                </div>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-primary">Upload Syllabus</button>
+                            </div>
+                            <p id="syllabus-message" class="login-message"></p>
+                        </form>
+                    </div>
+                    <div class="admin-card">
+                        <h3>Upload Note</h3>
+                        <form id="note-form" class="form">
+                            <div class="form-row">
+                                <div class="form-group full-width">
+                                    <label for="note-subject">Subject ID (optional):</label>
+                                    <input type="text" id="note-subject" placeholder="Subject ID">
+                                </div>
+                                <div class="form-group full-width">
+                                    <label for="note-title">Title:</label>
+                                    <input type="text" id="note-title" required>
+                                </div>
+                                <div class="form-group full-width">
+                                    <label for="note-content">Content:</label>
+                                    <textarea id="note-content" rows="6"></textarea>
+                                </div>
+                                <div class="form-group full-width">
+                                    <label for="note-doc">Document URL (optional):</label>
+                                    <input type="text" id="note-doc" placeholder="https://...">
+                                </div>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-primary">Create Note</button>
+                            </div>
+                            <p id="note-message" class="login-message"></p>
+                        </form>
                     </div>
                 </div>
             </section>
@@ -651,6 +793,106 @@
                             <p id="admin-panel-message" class="login-message"></p>
                         </form>
                     </div>
+                        <div class="admin-card">
+                            <h3>Send Notification</h3>
+                            <form id="send-notification-form" class="form">
+                                <div class="form-row">
+                                    <div class="form-group full-width">
+                                        <label for="notif-recipient-type">Recipient Type:</label>
+                                        <select id="notif-recipient-type">
+                                            <option value="USER">User</option>
+                                            <option value="SCHOOL">School</option>
+                                            <option value="ALL">All</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group full-width">
+                                        <label for="notif-recipient-select">Select Recipient (optional for ALL):</label>
+                                        <select id="notif-recipient-select"><option value="">-- choose recipient --</option></select>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group full-width">
+                                        <label for="notif-recipient-email">Recipient Email (for EMAIL channel):</label>
+                                        <input type="email" id="notif-recipient-email" placeholder="recipient@example.com">
+                                    </div>
+                                    <div class="admin-card">
+                                        <h3>Notification History</h3>
+                                        <div id="admin-notif-log" class="admin-list">
+                                            <p class="login-message">Loading notifications...</p>
+                                        </div>
+                                    </div>
+                                    <div class="admin-card">
+                                        <h3>Failed Deliveries</h3>
+                                        <div id="admin-retries-list" class="admin-list">
+                                            <p class="login-message">Loading failed deliveries...</p>
+                                        </div>
+                                        <div style="margin-top:8px;">
+                                            <button id="refresh-retries-btn" class="btn btn-outline small">Refresh</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group full-width">
+                                        <label for="notif-channel">Channel:</label>
+                                        <select id="notif-channel">
+                                            <option value="IN_APP">In-App</option>
+                                            <option value="EMAIL">Email</option>
+                                            <option value="SMS">SMS</option>
+                                            <option value="WHATSAPP">WhatsApp</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group full-width">
+                                        <label for="notif-scheduled-at">Schedule (optional):</label>
+                                        <input type="datetime-local" id="notif-scheduled-at">
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group full-width">
+                                        <label for="notif-template">Template:</label>
+                                        <select id="notif-template">
+                                            <option value="">-- none --</option>
+                                            <option value="welcome">Welcome message</option>
+                                            <option value="fee_reminder">Fee reminder</option>
+                                            <option value="event_reminder">Event reminder</option>
+                                        </select>
+                                        <button id="notif-preview" type="button" class="btn btn-outline small">Preview</button>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group full-width">
+                                        <label for="notif-subject">Subject:</label>
+                                        <input type="text" id="notif-subject" placeholder="Notification subject">
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group full-width">
+                                        <label for="notif-message">Message:</label>
+                                        <textarea id="notif-message" rows="3" placeholder="Your message"></textarea>
+                                    </div>
+                                </div>
+                                <div class="form-actions">
+                                    <button type="submit" class="btn btn-primary">Send Notification</button>
+                                </div>
+                                <p id="notif-message" class="login-message"></p>
+                            </form>
+                            <hr>
+                            <div>
+                                <h4>Test Gateway</h4>
+                                <form id="test-gateway-form" class="form">
+                                    <div class="form-row"><div class="form-group full-width"><label for="test-channel">Channel:</label><select id="test-channel"><option value="EMAIL">Email</option><option value="SMS">SMS</option><option value="WHATSAPP">WhatsApp</option></select></div></div>
+                                    <div class="form-row"><div class="form-group full-width"><label for="test-recipient">Recipient (email or phone):</label><input id="test-recipient" type="text" placeholder="recipient@example.com or 070..." /></div></div>
+                                    <div class="form-row"><div class="form-group full-width"><label for="test-subject">Subject (email):</label><input id="test-subject" type="text" placeholder="Test subject" /></div></div>
+                                    <div class="form-row"><div class="form-group full-width"><label for="test-message">Message:</label><textarea id="test-message" rows="2">Test message from Admin</textarea></div></div>
+                                    <div class="form-actions"><button id="test-gateway-btn" type="button" class="btn btn-outline">Send Test</button></div>
+                                    <p id="test-gateway-result" class="login-message"></p>
+                                </form>
+                            </div>
+                            </form>
+                        </div>
                 </div>
             </section>
 
@@ -750,6 +992,8 @@
         </div>
     </footer>
 
+    <div id="toast-container" aria-live="polite" aria-atomic="true" style="position:fixed;right:16px;bottom:16px;z-index:9999"></div>
+    <script src="/socket.io/socket.io.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
