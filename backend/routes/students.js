@@ -8,7 +8,6 @@ const router = express.Router();
 
 const validateStudentData = (req, res, next) => {
     const {
-        student_code,
         full_name,
         date_of_birth,
         gender,
@@ -17,7 +16,7 @@ const validateStudentData = (req, res, next) => {
         parent_contact
     } = req.body;
 
-    if (!student_code || !full_name || !date_of_birth || !gender || !admission_date || !parent_name || !parent_contact) {
+    if (!full_name || !date_of_birth || !gender || !admission_date || !parent_name || !parent_contact) {
         return res.status(400).json({ error: 'Missing required student fields' });
     }
     next();
@@ -85,11 +84,12 @@ router.post('/', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SCHOOL_ADMIN'
         if (!schoolId) {
             return res.status(400).json({ error: 'School context required' });
         }
+        const studentCode = await db.generateStudentCode(schoolId);
 
         const student = await db.createStudent({
             id: uuidv4(),
             school_id: schoolId,
-            student_code: req.body.student_code,
+            student_code: studentCode,
             full_name: req.body.full_name,
             gender: req.body.gender,
             date_of_birth: req.body.date_of_birth,
@@ -102,7 +102,8 @@ router.post('/', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SCHOOL_ADMIN'
             status: req.body.status || 'ACTIVE',
             gpa: req.body.gpa || 0,
             photo_url: req.body.photo_url,
-            graduated_at: req.body.graduated_at
+            graduated_at: req.body.graduated_at,
+            current_level: req.body.current_level
         });
 
         // Send email notification to Super Admin

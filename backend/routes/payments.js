@@ -2,6 +2,7 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { authenticateToken, authorizeRoles } = require('../middleware/auth');
 const db = require('../database');
+const feesRouter = require('./fees');
 
 const router = express.Router();
 
@@ -16,26 +17,46 @@ router.get('/', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SCHOOL_ADMIN',
     }
 });
 
-// Record a payment (from fee invoice)
+// Record a payment and automatically create its invoice.
 router.post('/record', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SCHOOL_ADMIN', 'ACCOUNTANT'), async (req, res) => {
     try {
-        const { invoiceId, amount, paymentMethod, officerName, studentId } = req.body;
-        if (!invoiceId || !amount || !paymentMethod) {
-            return res.status(400).json({ error: 'invoice_id, amount, and payment_method are required' });
+        const { amount, invoiceAmount, paymentMethod, officerName, studentId } = req.body;
+        if (!studentId || !Number.isFinite(Number(invoiceAmount)) || Number(invoiceAmount) <= 0 || !Number.isFinite(Number(amount)) || Number(amount) <= 0 || !paymentMethod) {
+            return res.status(400).json({ error: 'student_id, total fee due, amount paid, and payment method are required' });
+        }
+        if (!['CASH', 'TRANSFER'].includes(paymentMethod)) {
+            return res.status(400).json({ error: 'Payment method must be Cash or Bank Transfer' });
         }
 
         const schoolId = req.user.role === 'SUPER_ADMIN' ? req.body.school_id : req.user.school_id;
-        const invoice = await db.getInvoiceById(invoiceId);
-        if (!invoice || invoice.school_id !== schoolId) {
-            return res.status(404).json({ error: 'Invoice not found' });
+        if (!schoolId) {
+            return res.status(400).json({ error: 'Select a school before recording a payment' });
         }
+        const [school, student] = await Promise.all([db.getSchoolById(schoolId), db.getStudentById(studentId)]);
+        if (!school || !student || student.school_id !== schoolId) {
+            return res.status(404).json({ error: 'Student was not found for the selected school' });
+        }
+        if (Number(amount) > Number(invoiceAmount)) {
+            return res.status(400).json({ error: 'Payment amount cannot be greater than the outstanding balance' });
+        }
+
+        const invoice = await db.createInvoice({
+            id: uuidv4(),
+            school_id: schoolId,
+            student_id: studentId,
+            invoice_number: `INV-${new Date().getFullYear()}-${uuidv4().slice(0, 8).toUpperCase()}`,
+            amount: Number(invoiceAmount),
+            payment_method: paymentMethod,
+            status: 'PENDING',
+            description: 'School fees payment'
+        });
 
         // Record payment
         const payment = await db.createPayment({
             id: uuidv4(),
             school_id: schoolId,
-            student_id: studentId || invoice.student_id,
-            amount,
+            student_id: studentId,
+            amount: Number(amount),
             payment_method: paymentMethod,
             payment_type: 'FEE',
             status: 'COMPLETED',
@@ -45,7 +66,8 @@ router.post('/record', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SCHOOL_
         });
 
         // Update invoice
-        const updated = await db.recordPayment(invoiceId, amount);
+        const updated = await db.recordPayment(invoice.id, Number(amount));
+        const invoiceUrl = await feesRouter.generateInvoicePdf(updated, school, student);
 
         // Generate receipt and PDF
         const receipt = generateReceipt(updated, payment);
@@ -58,13 +80,16 @@ router.post('/record', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SCHOOL_
             const doc = new PDFDocument({ size: 'A4', margin: 50 });
             const stream = fs.createWriteStream(pdfPath);
             doc.pipe(stream);
-            doc.fontSize(20).text('School Payment Receipt', { align: 'center' });
+            doc.fontSize(20).text(school?.name || 'School', { align: 'center' });
+            doc.fontSize(14).text('Payment Receipt', { align: 'center' });
             doc.moveDown();
             doc.fontSize(12).text(`Receipt No: ${receipt.receiptNumber}`);
             doc.text(`Verification: ${receipt.verificationCode}`);
             doc.text(`Student: ${receipt.studentName}`);
             doc.text(`Invoice: ${invoice.invoice_number || invoice.id}`);
             doc.text(`Amount Paid: ${receipt.amountPaid}`);
+            doc.text(`Total Paid: ${updated.paid_amount}`);
+            doc.text(`Outstanding Balance: ${Math.max(0, updated.amount - updated.paid_amount)}`);
             doc.text(`Payment Method: ${receipt.paymentMethod || payment.payment_method}`);
             doc.text(`Paid Date: ${receipt.paidDate}`);
             doc.moveDown();
@@ -75,7 +100,7 @@ router.post('/record', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SCHOOL_
             console.error('Failed to generate PDF receipt:', pdfErr.message);
         }
 
-        res.json({ success: true, data: { payment, invoice: updated, receipt } });
+        res.json({ success: true, data: { payment, invoice: { ...updated, invoiceUrl }, receipt } });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -143,7 +168,7 @@ function generateReceipt(invoice, payment) {
         amountInWords: numberToWords(payment.amount),
         paymentMethod: payment.payment_method,
         paidDate: payment.paid_at,
-        balanceRemaining: (invoice.amount - (invoice.paid_amount || 0)) - payment.amount,
+        balanceRemaining: Math.max(0, invoice.amount - (invoice.paid_amount || 0)),
         officerName: payment.officer_name,
         academicSession: 'Current',
         term: 'Term 1'

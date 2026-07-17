@@ -238,6 +238,7 @@ const database = {
                 invoice_number TEXT NOT NULL,
                 amount REAL NOT NULL,
                 paid_amount REAL DEFAULT 0,
+                payment_method TEXT,
                 due_date TEXT,
                 status TEXT DEFAULT 'PENDING',
                 description TEXT,
@@ -385,8 +386,15 @@ const database = {
         await ensureColumn('subjects', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
         await ensureColumn('subjects', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
         await ensureColumn('students', 'school_id', 'TEXT');
+        await ensureColumn('students', 'full_name', 'TEXT');
+        await ensureColumn('students', 'student_code', 'TEXT');
         await ensureColumn('students', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
         await ensureColumn('students', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+        const studentColumns = await getTableColumns('students');
+        if (studentColumns.includes('name')) {
+            await run('UPDATE students SET full_name = name WHERE full_name IS NULL AND name IS NOT NULL');
+        }
+        await run('UPDATE students SET student_code = id WHERE student_code IS NULL');
         await ensureColumn('teachers', 'school_id', 'TEXT');
         await ensureColumn('teachers', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
         await ensureColumn('teachers', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
@@ -399,6 +407,7 @@ const database = {
         await ensureColumn('results', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
         await ensureColumn('results', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
         await ensureColumn('fees', 'school_id', 'TEXT');
+        await ensureColumn('fees', 'payment_method', 'TEXT');
         await ensureColumn('fees', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
         await ensureColumn('fees', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
         await ensureColumn('books', 'school_id', 'TEXT');
@@ -664,10 +673,50 @@ const database = {
 
     // Student operations
     createStudent: function (student) {
-        return run(
-            `INSERT INTO students (id, school_id, student_code, full_name, gender, date_of_birth, address, parent_name, parent_contact, medical_info, class_id, admission_date, status, gpa, photo_url, graduated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [student.id, student.school_id, student.student_code, student.full_name, student.gender, student.date_of_birth, student.address, student.parent_name, student.parent_contact, student.medical_info, student.class_id, student.admission_date, student.status || 'ACTIVE', student.gpa || 0, student.photo_url, student.graduated_at || null]
-        ).then(() => this.getStudentById(student.id));
+        // Support databases created by earlier versions, which used camelCase
+        // student fields, as well as the current schema.
+        return all('PRAGMA table_info(students)').then((columns) => {
+            const available = new Set(columns.map((column) => column.name));
+            const valuesByColumn = {
+                id: student.id,
+                school_id: student.school_id,
+                student_code: student.student_code,
+                full_name: student.full_name,
+                name: student.full_name,
+                gender: student.gender,
+                date_of_birth: student.date_of_birth,
+                dateOfBirth: student.date_of_birth,
+                address: student.address || null,
+                parent_name: student.parent_name,
+                parentName: student.parent_name,
+                parent_contact: student.parent_contact,
+                contactNumber: student.parent_contact,
+                medical_info: student.medical_info || null,
+                notes: student.medical_info || null,
+                class_id: student.class_id || null,
+                admission_date: student.admission_date,
+                enrollmentDate: student.admission_date,
+                currentLevel: student.current_level || 'Unassigned',
+                status: student.status || 'ACTIVE',
+                gpa: student.gpa || 0,
+                photo_url: student.photo_url || null,
+                graduated_at: student.graduated_at || null
+            };
+            const fields = Object.keys(valuesByColumn).filter((field) => available.has(field));
+            return run(
+                `INSERT INTO students (${fields.join(', ')}) VALUES (${fields.map(() => '?').join(', ')})`,
+                fields.map((field) => valuesByColumn[field])
+            );
+        }).then(() => this.getStudentById(student.id));
+    },
+
+    generateStudentCode: async function (schoolId) {
+        let code;
+        do {
+            const suffix = require('crypto').randomBytes(3).toString('hex').toUpperCase();
+            code = `STU-${new Date().getFullYear()}-${suffix}`;
+        } while (await get('SELECT id FROM students WHERE school_id = ? AND student_code = ?', [schoolId, code]));
+        return code;
     },
 
     getStudentById: function (id) {
@@ -1012,8 +1061,8 @@ const database = {
     // Fees
     createInvoice: function (invoice) {
         return run(
-            `INSERT INTO fees (id, school_id, student_id, invoice_number, amount, paid_amount, due_date, status, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [invoice.id, invoice.school_id, invoice.student_id, invoice.invoice_number, invoice.amount, invoice.paid_amount || 0, invoice.due_date, invoice.status || 'PENDING', invoice.description]
+            `INSERT INTO fees (id, school_id, student_id, invoice_number, amount, paid_amount, payment_method, due_date, status, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [invoice.id, invoice.school_id, invoice.student_id, invoice.invoice_number, invoice.amount, invoice.paid_amount || 0, invoice.payment_method || null, invoice.due_date, invoice.status || 'PENDING', invoice.description]
         ).then(() => this.getInvoiceById(invoice.id));
     },
 

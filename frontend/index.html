@@ -219,7 +219,7 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label for="student-id">Student ID:</label>
-                            <input type="text" id="student-id" placeholder="e.g., STU001" required>
+                            <input type="text" id="student-id" placeholder="Generated automatically when saved" readonly>
                         </div>
                         <div class="form-group">
                             <label for="student-name">Full Name:</label>
@@ -392,16 +392,20 @@
                         <form id="payment-form" class="form">
                             <div class="form-row">
                                 <div class="form-group full-width">
-                                    <label for="payment-invoice">Invoice ID:</label>
-                                    <input type="text" id="payment-invoice" placeholder="Invoice ID" required>
+                                    <label for="payment-student">Student ID:</label>
+                                    <input type="text" id="payment-student" placeholder="Student ID" required>
                                 </div>
                                 <div class="form-group">
-                                    <label for="payment-amount">Amount:</label>
-                                    <input type="number" id="payment-amount" placeholder="Amount" required>
+                                    <label for="payment-total-due">Total Fee Due:</label>
+                                    <input type="number" id="payment-total-due" placeholder="Total invoice amount" min="1" step="0.01" required>
                                 </div>
                                 <div class="form-group">
-                                    <label for="payment-method">Method:</label>
-                                    <select id="payment-method"><option value="CASH">Cash</option><option value="BANK">Bank</option><option value="CARD">Card</option></select>
+                                    <label for="payment-amount">Amount Paid:</label>
+                                    <input type="number" id="payment-amount" placeholder="Amount paid now" min="1" step="0.01" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="payment-method">Payment Method:</label>
+                                    <select id="payment-method" required><option value="CASH">Cash</option><option value="TRANSFER">Bank Transfer</option></select>
                                 </div>
                             </div>
                             <div class="form-actions">
@@ -411,30 +415,9 @@
                         </form>
                     </div>
                     <div class="admin-card">
-                        <h3>Create Invoice</h3>
-                        <form id="invoice-form" class="form">
-                            <div class="form-row">
-                                <div class="form-group full-width">
-                                    <label for="invoice-student">Student ID:</label>
-                                    <input type="text" id="invoice-student" placeholder="Student ID" required>
-                                </div>
-                                <div class="form-group">
-                                    <label for="invoice-amount">Amount:</label>
-                                    <input type="number" id="invoice-amount" required>
-                                </div>
-                                <div class="form-group">
-                                    <label for="invoice-due">Due Date:</label>
-                                    <input type="date" id="invoice-due">
-                                </div>
-                            </div>
-                            <div class="form-actions">
-                                <button type="submit" class="btn btn-primary">Create Invoice</button>
-                            </div>
-                            <p id="invoice-message" class="login-message"></p>
-                        </form>
-                    </div>
-                    <div class="admin-card">
                         <h3>Payments Dashboard</h3>
+                        <div id="payment-summary">Loading...</div>
+                        <h4>Invoices</h4>
                         <div id="payments-dashboard">Loading...</div>
                     </div>
                 </div>
@@ -725,7 +708,7 @@
             <h3>Contact</h3>
             <p>Email: <a href="mailto:school.management.website01@gmail.com">school.management.website01@gmail.com</a></p>
             <p>Phone: 07058292660</p>
-            <p>Address: 123 Education Ave, Knowledge City</p>
+            <p>Address: 1 ajah, lagos</p>
         </div>
     </div>
 

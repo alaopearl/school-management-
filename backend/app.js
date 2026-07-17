@@ -82,6 +82,7 @@ app.use('/api/upload', uploadRoutes);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // Serve generated receipts
 app.use('/receipts', express.static(path.join(__dirname, 'receipts')));
+app.use('/invoices', express.static(path.join(__dirname, 'invoices')));
 app.use('/api/teachers', teachersRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/admin', adminRoutes);

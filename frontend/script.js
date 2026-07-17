@@ -1,7 +1,13 @@
 // Student Record Tracker App - API Version
 // ==========================================
 
-const API_BASE_URL = 'http://localhost:5000/api';
+// Deployed frontend and API are served from the same Express app. When using a
+// local static server (for example VS Code Live Server), the API still runs on
+// port 5000, so send requests there instead of to the static-server port.
+const isLocalStaticServer =
+    window.location.protocol === 'file:' ||
+    (['localhost', '127.0.0.1'].includes(window.location.hostname) && window.location.port !== '5000');
+const API_BASE_URL = isLocalStaticServer ? 'http://localhost:5000/api' : `${window.location.origin}/api`;
 const USE_BACKEND = true; // Set false to fallback to localStorage if backend is unavailable
 const AUTH_STORAGE_KEY = 'sms_auth_token';
 
@@ -261,8 +267,8 @@ class StudentRecordTracker {
         });
 
         // Authentication
+        // The form's submit event covers clicking Login and pressing Enter.
         document.getElementById('login-form').addEventListener('submit', (e) => this.handleLogin(e));
-        document.getElementById('login-submit-btn').addEventListener('click', (e) => this.handleLogin(e));
         document.getElementById('show-login-btn').addEventListener('click', () => this.showLoginForm());
         document.getElementById('show-forgot-password-btn').addEventListener('click', () => this.showForgotPassword());
         document.getElementById('back-to-login-btn').addEventListener('click', () => this.showLogin());
@@ -285,7 +291,6 @@ class StudentRecordTracker {
         document.getElementById('test-gateway-btn')?.addEventListener('click', () => this.handleTestGateway());
         // Payments, Attendance, Academics handlers
         document.getElementById('payment-form')?.addEventListener('submit', (e) => this.handleRecordPayment(e));
-        document.getElementById('invoice-form')?.addEventListener('submit', (e) => this.handleCreateInvoice(e));
         document.getElementById('attendance-form')?.addEventListener('submit', (e) => this.handleRecordAttendance(e));
         document.getElementById('load-students-btn')?.addEventListener('click', () => this.loadStudentsForAttendance());
         document.getElementById('syllabus-form')?.addEventListener('submit', (e) => this.handleUploadSyllabus(e));
@@ -408,15 +413,19 @@ class StudentRecordTracker {
     // Payments
     async handleRecordPayment(e) {
         e.preventDefault();
-        const invoiceId = document.getElementById('payment-invoice').value.trim();
+        const studentId = document.getElementById('payment-student').value.trim();
+        const invoiceAmount = parseFloat(document.getElementById('payment-total-due').value);
         const amount = parseFloat(document.getElementById('payment-amount').value);
         const method = document.getElementById('payment-method').value;
         const msgEl = document.getElementById('payment-message');
-        if (!invoiceId || !amount) { msgEl.textContent = 'Invoice and amount required'; return; }
+        if (!studentId || !invoiceAmount || !amount) { msgEl.textContent = 'Student ID, total fee due, and amount paid are required'; return; }
+        if (amount > invoiceAmount) { msgEl.textContent = 'Amount paid cannot be greater than the total fee due'; return; }
         try {
-            const res = await this.makeRequest('/payments/record', 'POST', { invoiceId, amount, paymentMethod: method });
-            msgEl.textContent = 'Payment recorded';
-            this.fetchPaymentsDashboard();
+            const payload = { studentId, invoiceAmount, amount, paymentMethod: method };
+            if (this.user?.role === 'SUPER_ADMIN') payload.school_id = this.getSchoolContext();
+            const res = await this.makeRequest('/payments/record', 'POST', payload);
+            msgEl.textContent = `Payment saved and invoice ${res.data?.invoice?.invoice_number || ''} generated.`;
+            await Promise.all([this.fetchPaymentsDashboard(), this.fetchInvoices()]);
             // if receipt present, show download link
             if (res.data && res.data.receipt && res.data.receipt.receiptUrl) {
                 const dl = document.createElement('a');
@@ -427,46 +436,44 @@ class StudentRecordTracker {
                 msgEl.appendChild(document.createElement('br'));
                 msgEl.appendChild(dl);
             }
+            if (res.data?.invoice?.invoiceUrl) {
+                const invoiceLink = document.createElement('a');
+                invoiceLink.href = res.data.invoice.invoiceUrl;
+                invoiceLink.textContent = 'View Invoice';
+                invoiceLink.className = 'btn btn-link';
+                invoiceLink.target = '_blank';
+                msgEl.appendChild(document.createElement('br'));
+                msgEl.appendChild(invoiceLink);
+            }
         } catch (err) { msgEl.textContent = err.message; }
-    }
-
-    async handleCreateInvoice(e) {
-        e.preventDefault();
-        const studentId = document.getElementById('invoice-student').value.trim();
-        const amount = parseFloat(document.getElementById('invoice-amount').value);
-        const dueDate = document.getElementById('invoice-due').value || null;
-        const msgEl = document.getElementById('invoice-message');
-        if (!studentId || !amount) { msgEl.textContent = 'Student and amount required'; return; }
-        try {
-            const res = await this.makeRequest('/fees/invoices', 'POST', { studentId, amount, dueDate });
-            msgEl.textContent = 'Invoice created: ' + (res.data?.invoice_number || res.data?.id || '');
-            this.fetchInvoices();
-        } catch (err) { msgEl.textContent = 'Failed to create invoice: ' + err.message; }
     }
 
     async fetchInvoices() {
         try {
-            const res = await this.makeRequest('/fees/invoices', 'GET');
+            const res = await this.makeRequest(this.appendSchoolContext('/fees/invoices'), 'GET');
             const container = document.getElementById('payments-dashboard');
             if (!res.data || res.data.length === 0) { container.innerHTML = '<p>No invoices</p>'; return; }
-            container.innerHTML = res.data.map(i => `<div>${i.invoice_number || i.id} • ${i.amount} • ${i.status || i.type || ''}</div>`).join('');
+            container.innerHTML = res.data.map(i => {
+                const outstanding = Math.max(0, Number(i.amount || 0) - Number(i.paid_amount || 0));
+                return `<div><strong>${i.invoice_number || i.id}</strong> • Total: NGN ${Number(i.amount || 0).toLocaleString()} • Paid: NGN ${Number(i.paid_amount || 0).toLocaleString()} • Outstanding: NGN ${outstanding.toLocaleString()} • ${i.payment_method === 'TRANSFER' ? 'Bank Transfer' : 'Cash'} • ${i.status || ''}</div>`;
+            }).join('');
         } catch (err) { document.getElementById('payments-dashboard').innerHTML = '<p>Unable to load invoices</p>'; }
     }
 
     async fetchPaymentsDashboard() {
         try {
-            const res = await this.makeRequest('/payments/dashboard/summary', 'GET');
-            const el = document.getElementById('payments-dashboard');
+            const res = await this.makeRequest(this.appendSchoolContext('/payments/dashboard/summary'), 'GET');
+            const el = document.getElementById('payment-summary');
             if (!res.data) { el.innerHTML = '<p>No data</p>'; return; }
             const d = res.data;
             el.innerHTML = `
-                <div>Total Revenue: ${d.totalRevenue || 0}</div>
+                <div>Total Payments: NGN ${Number(d.totalRevenue || 0).toLocaleString()}</div>
                 <div>Today: ${d.todayPayments || 0}</div>
                 <div>Monthly: ${d.monthlyRevenue || 0}</div>
-                <div>Outstanding: ${d.outstandingFees || 0}</div>
+                <div>Outstanding: NGN ${Number(d.outstandingFees || 0).toLocaleString()}</div>
             `;
         } catch (err) {
-            const el = document.getElementById('payments-dashboard'); el.innerHTML = '<p>Unable to load dashboard</p>';
+            const el = document.getElementById('payment-summary'); el.innerHTML = '<p>Unable to load dashboard</p>';
         }
     }
 
@@ -1400,6 +1407,7 @@ class StudentRecordTracker {
         if (sectionId === 'schools') await this.renderSchools();
         if (sectionId === 'logs') await this.renderLogs();
         if (sectionId === 'user-management') await this.renderUserManagement();
+        if (sectionId === 'payments') await Promise.all([this.fetchPaymentsDashboard(), this.fetchInvoices()]);
     }
 
     async makeRequest(endpoint, method = 'GET', data = null) {
@@ -1460,6 +1468,7 @@ class StudentRecordTracker {
             notes: document.getElementById('notes').value
         };
 
+        let assignedCode = student.id;
         try {
             if (USE_BACKEND) {
                 const payload = {
@@ -1472,11 +1481,13 @@ class StudentRecordTracker {
                     parent_contact: student.contactNumber,
                     address: student.address,
                     medical_info: student.notes,
+                    current_level: student.currentLevel,
                     status: student.status,
                     gpa: student.gpa
                 };
                 const response = await this.makeRequest('/students', 'POST', payload);
                 this.students.unshift(this.normalizeStudent(response.data));
+                assignedCode = response.data?.student_code || student.id;
             } else {
                 if (this.students.some(s => s.id === student.id)) {
                     this.showMessage('A student with this ID already exists!', 'error');
@@ -1488,7 +1499,7 @@ class StudentRecordTracker {
             }
 
             document.getElementById('student-form').reset();
-            this.showMessage('Student record added successfully!', 'success');
+            this.showMessage(`Student record added successfully. Student ID: ${assignedCode}`, 'success');
             await this.updateDashboard();
             await this.displayRecords();
         } catch (error) {
