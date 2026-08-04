@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 const navItems = [
   ['overview', 'Overview', '⌂'], ['students', 'Students', '♙'], ['staff', 'Staff', '👥'], ['attendance', 'Attendance', '✓'],
@@ -41,6 +41,10 @@ function App() {
   const [active, setActive] = useState('overview');
   const [collapsed, setCollapsed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' ? window.innerWidth <= 700 : false);
+  const mobileMenuButtonRef = useRef(null);
+  const sidebarRef = useRef(null);
+  const prevMenuOpenRef = useRef(menuOpen);
   const [token, setToken] = useState(() => localStorage.getItem('sms_auth_token'));
   const [user, setUser] = useState(null);
   const [school, setSchool] = useState(null);
@@ -133,6 +137,53 @@ function App() {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    const updateIsMobile = () => {
+      setIsMobile(window.innerWidth <= 700);
+    };
+
+    updateIsMobile();
+    window.addEventListener('resize', updateIsMobile);
+    return () => window.removeEventListener('resize', updateIsMobile);
+  }, []);
+
+  useEffect(() => {
+    if (!isMobile && menuOpen) {
+      setMenuOpen(false);
+    }
+  }, [isMobile, menuOpen]);
+
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setMenuOpen(false);
+      }
+    };
+
+    const handleClickOutside = (event) => {
+      if (sidebarRef.current && !sidebarRef.current.contains(event.target) && !(mobileMenuButtonRef.current && mobileMenuButtonRef.current.contains(event.target))) {
+        setMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('mousedown', handleClickOutside);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [menuOpen]);
+
+  useEffect(() => {
+    if (!menuOpen && prevMenuOpenRef.current) {
+      mobileMenuButtonRef.current?.focus();
+    }
+    prevMenuOpenRef.current = menuOpen;
+  }, [menuOpen]);
+
   const loadStudents = async (authToken = token, currentUser = user) => {
     try {
       if (currentUser?.role === 'SUPER_ADMIN' && !currentUser?.school_id) {
@@ -145,6 +196,15 @@ function App() {
     } catch {
       setStudents([]);
     }
+  };
+
+  const toggleSidebar = () => {
+    if (isMobile) {
+      setMenuOpen((current) => !current);
+      return;
+    }
+
+    setCollapsed((current) => !current);
   };
 
   const visibleStudents = useMemo(() => {
@@ -369,7 +429,7 @@ function App() {
 
   return (
     <div className={`app ${collapsed ? 'sidebar-collapsed' : ''} ${menuOpen ? 'menu-open' : ''}`}>
-      <aside className="sidebar">
+      <aside ref={sidebarRef} id="main-sidebar" className="sidebar" aria-hidden={isMobile && !menuOpen}>
         <div className="brand">
           <div className="brand-mark"><span></span><span></span><span></span></div>
           <strong>edu<span>manage</span></strong>
@@ -409,15 +469,17 @@ function App() {
       <main>
         <header className="topbar">
           <button
+            ref={mobileMenuButtonRef}
             className="mobile-menu"
             aria-label={menuOpen ? 'Close menu' : 'Open menu'}
             aria-expanded={menuOpen}
             aria-controls="main-sidebar"
-            onClick={() => setMenuOpen(!menuOpen)}
+            onClick={toggleSidebar}
           >
             <span className={`hamburger ${menuOpen ? 'is-open' : ''}`} aria-hidden="true">☰</span>
+            <span className="mobile-menu-label">{menuOpen ? 'Close menu' : 'Open menu'}</span>
           </button>
-          <button className="collapse" onClick={() => setCollapsed(!collapsed)}>☰</button>
+          <button className="collapse" onClick={() => setCollapsed((current) => !current)}>☰</button>
           <div className="page-title">
             <small>{school?.name || 'Your School'}</small>
             <h1>{visibleNavItems.find((item) => item[0] === active)?.[1] || 'Help & support'}</h1>

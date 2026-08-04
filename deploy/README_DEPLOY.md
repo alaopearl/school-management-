@@ -39,11 +39,11 @@ Environment variables
 
 Set the following environment variables for production in your process manager or systemd unit:
 
-- `JWT_SECRET` (required)
-- `NODE_ENV=production`
-- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` (for OTP and support email delivery)
+- `ST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` (for OTP and support email delivery)
 - `SUPPORT_EMAIL` (global fallback)
-- `GMAIL_APP_PASSWORD` (optional Gmail fallback when SMTP is unavailable)
+- `GMAIL_APP_PASJWT_SECRET` (required)
+- `NODE_ENV=production`
+- `SMTP_HOSWORD` (optional Gmail fallback when SMTP is unavailable)
 - `CLOUDINARY_URL` (optional image upload provider)
 
 Notes
