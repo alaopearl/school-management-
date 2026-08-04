@@ -153,49 +153,6 @@ const database = {
             )
         `);
 
-        const demoSchool = await this.getSchoolByCode('DEMO');
-        const demoEmail = 'demo@demoschool.edu';
-        const demoPassword = 'TestSchool123!';
-        const demoUser = await this.getUserByEmail(demoEmail);
-
-        if (!demoSchool) {
-            const createdSchool = await this.createSchool({
-                id: uuidv4(),
-                name: 'Demo School',
-                code: 'DEMO',
-                email: 'contact@demoschool.edu',
-                phone: '08000000000',
-                address: '123 Demo Road, Lagos',
-                motto: 'Excellence in every lesson',
-                principal_name: 'Demo Principal',
-                principal_phone: '08011111111',
-                school_type: 'PRIVATE',
-                primary_color: '#3B82F6',
-                secondary_color: '#1E40AF',
-                session_system: 'TERM',
-                status: 'ACTIVE',
-                subscription_plan: 'STANDARD',
-                settings: JSON.stringify({ theme: 'light', language: 'en' })
-            });
-            await this.updateSchool(createdSchool.id, { state: 'Lagos', country: 'Nigeria', principal_email: 'principal@demoschool.edu', login_enabled: 1, status: 'ACTIVE' });
-        }
-
-        if (!demoUser) {
-            const schoolForDemo = await this.getSchoolByCode('HARMONY');
-            if (schoolForDemo) {
-                await this.createUser({
-                    id: uuidv4(),
-                    school_id: schoolForDemo.id,
-                    email: demoEmail,
-                    password: await bcrypt.hash(demoPassword, 10),
-                    full_name: 'Demo School Admin',
-                    phone: '08022222222',
-                    role: 'SCHOOL_ADMIN',
-                    status: 'ACTIVE'
-                });
-            }
-        }
-
         const superAdminEmail = process.env.SUPER_ADMIN_EMAIL;
         const superAdminPassword = process.env.SUPER_ADMIN_PASSWORD;
         const superAdminName = process.env.SUPER_ADMIN_NAME || 'Platform Super Admin';

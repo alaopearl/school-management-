@@ -6,12 +6,7 @@ const navItems = [
   ['parent-portal', 'Parent portal', '◔'], ['settings', 'Settings', '⚙']
 ];
 
-const demoStudents = [
-  { id: 'ST-1042', name: 'Amina Yusuf', grade: 'Primary 5', guardian: 'Hauwa Yusuf', status: 'Active', initials: 'AY', color: 'violet' },
-  { id: 'ST-1041', name: 'Daniel Okoro', grade: 'JSS 2', guardian: 'Chinwe Okoro', status: 'Active', initials: 'DO', color: 'orange' },
-  { id: 'ST-1040', name: 'Zainab Bello', grade: 'SSS 1', guardian: 'Ibrahim Bello', status: 'On leave', initials: 'ZB', color: 'teal' },
-  { id: 'ST-1039', name: 'Chukwuemeka Obi', grade: 'Primary 4', guardian: 'Adaobi Obi', status: 'Active', initials: 'CO', color: 'blue' }
-];
+const demoStudents = [];
 
 const api = async (endpoint, token, options = {}) => {
   const response = await fetch(`/api${endpoint}`, {
@@ -530,14 +525,6 @@ function App() {
             </form>
           </div>
 
-          <div className="panel records" style={{ marginTop: 18 }}>
-            <div className="panel-heading"><div><h3>Test school account</h3><p>Use the demo school login for a quick walkthrough</p></div></div>
-            <div className="mini-grid">
-              <article className="mini-card"><b>Email</b><small>demo@harmonyacademy.edu</small></article>
-              <article className="mini-card"><b>Password</b><small>TestSchool123!</small></article>
-              <article className="mini-card"><b>School code</b><small>HARMONY</small></article>
-            </div>
-          </div>
         </div>
       )}
 
