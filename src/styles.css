@@ -10,6 +10,9 @@
 .hamburger.is-open{transform:rotate(90deg) scale(1.05);opacity:.9}
 .mobile-menu:focus{outline:2px solid rgba(37,99,235,.18);outline-offset:2px}
 
+/* Ensure chart line contrasts on the blue sidebar background */
+.line{stroke:#9ec5ff !important;stroke-linecap:round;stroke-linejoin:round}
+
 /* Blue visual system */
 .sidebar{background:linear-gradient(180deg,#0b2f6b 0%,#102456 100%)}
 .brand strong span{color:#7dd3fc}.brand-mark span{background:#60a5fa}
