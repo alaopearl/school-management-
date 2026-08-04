@@ -1,5 +1,7 @@
 const sqlite3 = require('sqlite3').verbose();
+const bcrypt = require('bcrypt');
 const path = require('path');
+const { v4: uuidv4 } = require('uuid');
 require('dotenv').config();
 
 const databaseFile = process.env.DATABASE_PATH || './students.db';
@@ -48,6 +50,17 @@ const serializeJson = (value) => {
     return typeof value === 'string' ? value : JSON.stringify(value);
 };
 
+const normalizeStudentRecord = (student) => {
+    if (!student) return student;
+
+    const currentLevel = student.current_level ?? student.currentLevel ?? null;
+    return {
+        ...student,
+        current_level: currentLevel,
+        currentLevel: currentLevel,
+    };
+};
+
 const getTableColumns = async (tableName) => {
     const rows = await all(`PRAGMA table_info(${tableName})`);
     return rows.map((row) => row.name);
@@ -55,6 +68,9 @@ const getTableColumns = async (tableName) => {
 
 const ensureColumn = async (tableName, columnName, definition) => {
     const columns = await getTableColumns(tableName);
+    // Optional modules from older installations may not have created every
+    // table yet. Do not abort the entire tenant migration for those tables.
+    if (columns.length === 0) return;
     if (!columns.includes(columnName)) {
         console.log(`Adding missing column ${columnName} to table ${tableName}`);
         try {
@@ -88,18 +104,38 @@ const database = {
                 website TEXT,
                 principal_name TEXT,
                 principal_phone TEXT,
+                principal_email TEXT,
                 school_type TEXT,
                 primary_color TEXT,
                 secondary_color TEXT,
                 session_system TEXT,
+                state TEXT,
+                country TEXT,
+                student_count_estimate INTEGER,
+                staff_count_estimate INTEGER,
                 status TEXT DEFAULT 'ACTIVE',
+                login_enabled INTEGER DEFAULT 1,
                 subscription_plan TEXT DEFAULT 'FREE',
                 subscription_expires_at TEXT,
+                approved_by TEXT,
+                approved_at TEXT,
+                rejection_reason TEXT,
                 settings TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         `);
+
+        await ensureColumn('schools', 'principal_email', 'TEXT');
+        await ensureColumn('schools', 'state', 'TEXT');
+        await ensureColumn('schools', 'country', 'TEXT');
+        await ensureColumn('schools', 'student_count_estimate', 'INTEGER');
+        await ensureColumn('schools', 'staff_count_estimate', 'INTEGER');
+        await ensureColumn('schools', 'login_enabled', 'INTEGER DEFAULT 1');
+        await ensureColumn('schools', 'approved_by', 'TEXT');
+        await ensureColumn('schools', 'approved_at', 'TEXT');
+        await ensureColumn('schools', 'rejection_reason', 'TEXT');
+        await ensureColumn('schools', 'support_email', 'TEXT');
 
         await run(`
             CREATE TABLE IF NOT EXISTS users (
@@ -116,6 +152,78 @@ const database = {
                 FOREIGN KEY(school_id) REFERENCES schools(id) ON DELETE CASCADE
             )
         `);
+
+        const demoSchool = await this.getSchoolByCode('DEMO');
+        const demoEmail = 'demo@demoschool.edu';
+        const demoPassword = 'TestSchool123!';
+        const demoUser = await this.getUserByEmail(demoEmail);
+
+        if (!demoSchool) {
+            const createdSchool = await this.createSchool({
+                id: uuidv4(),
+                name: 'Demo School',
+                code: 'DEMO',
+                email: 'contact@demoschool.edu',
+                phone: '08000000000',
+                address: '123 Demo Road, Lagos',
+                motto: 'Excellence in every lesson',
+                principal_name: 'Demo Principal',
+                principal_phone: '08011111111',
+                school_type: 'PRIVATE',
+                primary_color: '#3B82F6',
+                secondary_color: '#1E40AF',
+                session_system: 'TERM',
+                status: 'ACTIVE',
+                subscription_plan: 'STANDARD',
+                settings: JSON.stringify({ theme: 'light', language: 'en' })
+            });
+            await this.updateSchool(createdSchool.id, { state: 'Lagos', country: 'Nigeria', principal_email: 'principal@demoschool.edu', login_enabled: 1, status: 'ACTIVE' });
+        }
+
+        if (!demoUser) {
+            const schoolForDemo = await this.getSchoolByCode('HARMONY');
+            if (schoolForDemo) {
+                await this.createUser({
+                    id: uuidv4(),
+                    school_id: schoolForDemo.id,
+                    email: demoEmail,
+                    password: await bcrypt.hash(demoPassword, 10),
+                    full_name: 'Demo School Admin',
+                    phone: '08022222222',
+                    role: 'SCHOOL_ADMIN',
+                    status: 'ACTIVE'
+                });
+            }
+        }
+
+        const superAdminEmail = process.env.SUPER_ADMIN_EMAIL;
+        const superAdminPassword = process.env.SUPER_ADMIN_PASSWORD;
+        const superAdminName = process.env.SUPER_ADMIN_NAME || 'Platform Super Admin';
+        if (superAdminEmail && superAdminPassword) {
+            const existingSuperAdmin = await this.getUserByEmail(superAdminEmail);
+            const hashedPassword = await bcrypt.hash(superAdminPassword, 10);
+            if (existingSuperAdmin) {
+                await this.updateUser(existingSuperAdmin.id, {
+                    email: superAdminEmail,
+                    password: hashedPassword,
+                    full_name: superAdminName,
+                    role: 'SUPER_ADMIN',
+                    school_id: null,
+                    status: 'ACTIVE'
+                });
+            } else {
+                await this.createUser({
+                    id: uuidv4(),
+                    school_id: null,
+                    email: superAdminEmail,
+                    password: hashedPassword,
+                    full_name: superAdminName,
+                    phone: process.env.SUPER_ADMIN_PHONE || null,
+                    role: 'SUPER_ADMIN',
+                    status: 'ACTIVE'
+                });
+            }
+        }
 
         await run(`
             CREATE TABLE IF NOT EXISTS classes (
@@ -379,6 +487,15 @@ const database = {
         await ensureColumn('schools', 'settings', 'TEXT');
         await ensureColumn('schools', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
         await ensureColumn('schools', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+        await ensureColumn('schools', 'state', 'TEXT');
+        await ensureColumn('schools', 'country', 'TEXT');
+        await ensureColumn('schools', 'principal_email', 'TEXT');
+        await ensureColumn('schools', 'student_count_estimate', 'INTEGER');
+        await ensureColumn('schools', 'staff_count_estimate', 'INTEGER');
+        await ensureColumn('schools', 'login_enabled', 'INTEGER DEFAULT 1');
+        await ensureColumn('schools', 'approved_by', 'TEXT');
+        await ensureColumn('schools', 'approved_at', 'DATETIME');
+        await ensureColumn('schools', 'rejection_reason', 'TEXT');
         await ensureColumn('classes', 'school_id', 'TEXT');
         await ensureColumn('classes', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
         await ensureColumn('classes', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
@@ -388,11 +505,15 @@ const database = {
         await ensureColumn('students', 'school_id', 'TEXT');
         await ensureColumn('students', 'full_name', 'TEXT');
         await ensureColumn('students', 'student_code', 'TEXT');
+        await ensureColumn('students', 'current_level', 'TEXT');
         await ensureColumn('students', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
         await ensureColumn('students', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
         const studentColumns = await getTableColumns('students');
         if (studentColumns.includes('name')) {
             await run('UPDATE students SET full_name = name WHERE full_name IS NULL AND name IS NOT NULL');
+        }
+        if (studentColumns.includes('currentLevel')) {
+            await run('UPDATE students SET current_level = currentLevel WHERE current_level IS NULL AND currentLevel IS NOT NULL');
         }
         await run('UPDATE students SET student_code = id WHERE student_code IS NULL');
         await ensureColumn('teachers', 'school_id', 'TEXT');
@@ -617,6 +738,39 @@ const database = {
         return all('SELECT * FROM schools ORDER BY name');
     },
 
+    listSchoolsWithMetrics: function ({ search = '', status = '', sort = 'created_at', direction = 'DESC' } = {}) {
+        const allowedSorts = ['name', 'status', 'created_at', 'subscription_expires_at'];
+        const orderBy = allowedSorts.includes(sort) ? sort : 'created_at';
+        const order = direction === 'ASC' ? 'ASC' : 'DESC';
+        const where = [];
+        const values = [];
+        if (search) { where.push('(s.name LIKE ? OR s.code LIKE ? OR s.email LIKE ?)'); values.push(`%${search}%`, `%${search}%`, `%${search}%`); }
+        if (status) { where.push('s.status = ?'); values.push(status); }
+        const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+        return all(`SELECT s.*, COUNT(DISTINCT st.id) AS student_count, COUNT(DISTINCT t.id) AS teacher_count, COUNT(DISTINCT u.id) AS staff_count
+          FROM schools s LEFT JOIN students st ON st.school_id = s.id LEFT JOIN teachers t ON t.school_id = s.id LEFT JOIN users u ON u.school_id = s.id
+          ${clause} GROUP BY s.id ORDER BY s.${orderBy} ${order}`, values);
+    },
+
+    updateSchool: function (id, updates) {
+        const allowed = ['name', 'code', 'logo_url', 'motto', 'address', 'email', 'phone', 'website', 'principal_name', 'principal_phone', 'principal_email', 'support_email', 'school_type', 'primary_color', 'secondary_color', 'session_system', 'state', 'country', 'student_count_estimate', 'staff_count_estimate', 'status', 'login_enabled', 'subscription_plan', 'subscription_expires_at', 'approved_by', 'approved_at', 'rejection_reason'];
+        const fields = []; const values = [];
+        for (const [key, value] of Object.entries(updates)) if (allowed.includes(key) && value !== undefined) { fields.push(`${key} = ?`); values.push(value); }
+        if (!fields.length) return this.getSchoolById(id);
+        fields.push('updated_at = CURRENT_TIMESTAMP'); values.push(id);
+        return run(`UPDATE schools SET ${fields.join(', ')} WHERE id = ?`, values).then(() => this.getSchoolById(id));
+    },
+
+    getPlatformMetrics: async function () {
+        const [schools, students, teachers, revenue, activities] = await Promise.all([
+            get(`SELECT COUNT(*) AS total, SUM(CASE WHEN status = 'PENDING_APPROVAL' THEN 1 ELSE 0 END) AS pending, SUM(CASE WHEN status = 'ACTIVE' THEN 1 ELSE 0 END) AS active, SUM(CASE WHEN status = 'SUSPENDED' THEN 1 ELSE 0 END) AS suspended, SUM(CASE WHEN subscription_expires_at IS NOT NULL AND subscription_expires_at < CURRENT_TIMESTAMP THEN 1 ELSE 0 END) AS expired FROM schools`),
+            get('SELECT COUNT(*) AS total FROM students'), get('SELECT COUNT(*) AS total FROM teachers'),
+            get("SELECT COALESCE(SUM(amount), 0) AS total FROM payments WHERE status = 'COMPLETED'"),
+            all('SELECT * FROM logs ORDER BY created_at DESC LIMIT 12')
+        ]);
+        return { schools, total_students: students.total, total_teachers: teachers.total, total_revenue: revenue.total, recent_activities: activities };
+    },
+
     deleteSchool: function (id) {
         return run('DELETE FROM schools WHERE id = ?', [id]);
     },
@@ -677,6 +831,7 @@ const database = {
         // student fields, as well as the current schema.
         return all('PRAGMA table_info(students)').then((columns) => {
             const available = new Set(columns.map((column) => column.name));
+            const currentLevel = student.current_level ?? student.currentLevel ?? null;
             const valuesByColumn = {
                 id: student.id,
                 school_id: student.school_id,
@@ -696,7 +851,8 @@ const database = {
                 class_id: student.class_id || null,
                 admission_date: student.admission_date,
                 enrollmentDate: student.admission_date,
-                currentLevel: student.current_level || 'Unassigned',
+                current_level: currentLevel,
+                currentLevel: currentLevel,
                 status: student.status || 'ACTIVE',
                 gpa: student.gpa || 0,
                 photo_url: student.photo_url || null,
@@ -707,7 +863,7 @@ const database = {
                 `INSERT INTO students (${fields.join(', ')}) VALUES (${fields.map(() => '?').join(', ')})`,
                 fields.map((field) => valuesByColumn[field])
             );
-        }).then(() => this.getStudentById(student.id));
+        }).then(() => this.getStudentById(student.id)).then(normalizeStudentRecord);
     },
 
     generateStudentCode: async function (schoolId) {
@@ -720,23 +876,31 @@ const database = {
     },
 
     getStudentById: function (id) {
-        return get('SELECT * FROM students WHERE id = ?', [id]);
+        return get('SELECT * FROM students WHERE id = ?', [id]).then(normalizeStudentRecord);
     },
 
     listStudentsBySchool: function (schoolId) {
-        return all('SELECT * FROM students WHERE school_id = ? ORDER BY created_at DESC', [schoolId]);
+        return all('SELECT * FROM students WHERE school_id = ? ORDER BY created_at DESC', [schoolId]).then(rows => rows.map(normalizeStudentRecord));
     },
 
     updateStudent: function (id, updates) {
         const fields = [];
         const values = [];
+        const currentLevel = updates.current_level ?? updates.currentLevel;
         for (const [key, value] of Object.entries(updates)) {
+            if (key === 'current_level' || key === 'currentLevel') {
+                continue;
+            }
             fields.push(`${key} = ?`);
             values.push(value);
         }
+        if (currentLevel !== undefined) {
+            fields.push('current_level = ?');
+            values.push(currentLevel);
+        }
         fields.push('updated_at = CURRENT_TIMESTAMP');
         values.push(id);
-        return run(`UPDATE students SET ${fields.join(', ')} WHERE id = ?`, values).then(() => this.getStudentById(id));
+        return run(`UPDATE students SET ${fields.join(', ')} WHERE id = ?`, values).then(() => this.getStudentById(id)).then(normalizeStudentRecord);
     },
 
     deleteStudent: function (id) {
@@ -746,7 +910,7 @@ const database = {
     searchStudents: function (schoolId, query) {
         const searchTerm = `%${query}%`;
         const baseSql = `SELECT * FROM students WHERE school_id = ? AND (full_name LIKE ? OR student_code LIKE ? OR parent_name LIKE ? OR parent_contact LIKE ?) ORDER BY created_at DESC`;
-        return all(baseSql, [schoolId, searchTerm, searchTerm, searchTerm, searchTerm]);
+        return all(baseSql, [schoolId, searchTerm, searchTerm, searchTerm, searchTerm]).then(rows => rows.map(normalizeStudentRecord));
     },
 
     filterStudents: function (schoolId, filters = {}) {
@@ -765,7 +929,7 @@ const database = {
             values.push(filters.gender);
         }
         query += ' ORDER BY created_at DESC';
-        return all(query, values);
+        return all(query, values).then(rows => rows.map(normalizeStudentRecord));
     },
 
     getStatistics: function (schoolId) {

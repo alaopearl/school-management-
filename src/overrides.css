@@ -1,0 +1,71 @@
+/* Modernized overrides: clean spacing, subtle shadows, refined typography */
+:root{
+  --bg:#ffffff;
+  --card:#ffffff;
+  --muted:#6b7280;
+  --accent:#2563eb;
+  --accent-2:#1e40af;
+  --surface-2:#f3f6fb;
+  --glass: rgba(16,36,86,0.06);
+  --shadow-1: 0 6px 18px rgba(23,29,37,0.06);
+}
+
+body{background:var(--bg);color:#0f1724;-webkit-font-smoothing:antialiased}
+.app{grid-template-columns:260px 1fr}
+.sidebar{padding:28px 18px;height:100vh;box-shadow:none;border-right:1px solid rgba(15,23,36,0.04)}
+.brand{font-size:20px;letter-spacing:0.2px}
+.sidebar button{padding:12px 14px;border-radius:10px;transition:all .18s ease}
+.sidebar nav button.active{background:linear-gradient(180deg,var(--accent) 0%,var(--accent-2) 100%);box-shadow:0 8px 20px rgba(37,99,235,0.12)}
+
+.page-content{padding:32px}
+.panel{background:var(--card);border-radius:12px;padding:20px;box-shadow:var(--shadow-1);border:1px solid rgba(15,23,36,0.04)}
+.panel-heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.panel-heading h3{margin:0;font:700 16px Manrope;color:#0f1724}
+
+.ticket-form input,.ticket-form select,.ticket-form textarea,.login-card input{border:1px solid rgba(15,23,36,0.08);background:var(--surface-2);padding:11px;border-radius:8px}
+.ticket-form label{color:var(--muted);font-weight:600}
+.ticket-fields{gap:14px}
+
+.primary{background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;padding:10px 14px;border-radius:10px;border:0;font-weight:700;box-shadow:0 8px 24px rgba(37,99,235,0.14)}
+.primary:hover{transform:translateY(-1px)}
+.user-button{background:#fff;border:1px solid rgba(15,23,36,0.06);box-shadow:none;color:var(--accent)}
+
+.modal-layer{position:fixed;inset:0;background:rgba(8,12,20,0.45);display:grid;place-items:center;padding:28px;z-index:60}
+.login-card,.student-card{width:760px;max-width:100%;border-radius:12px;box-shadow:0 18px 48px rgba(8,12,20,0.28);overflow:hidden}
+.login-card .brand.compact{padding:16px 18px}
+.student-card .student-fields label{display:block}
+
+/* student-card specific: prominent white panel with bold labels */
+.student-card{background:var(--card);padding:22px}
+.student-card h2{font:700 20px Manrope;margin-bottom:6px}
+.student-card label{font-weight:700;color:#0f1724;font-size:13px}
+.student-card input,.student-card select,.student-card textarea{background:#fff;border:1px solid rgba(15,23,36,0.06);padding:12px;border-radius:8px}
+
+.table-head,.table-row{display:grid;grid-template-columns:2fr 1fr .9fr 80px;align-items:center}
+.table-head{font-size:12px;color:var(--muted);padding:12px 14px}
+.table-row{padding:14px;border-radius:10px;margin-bottom:8px;background:linear-gradient(180deg,transparent,transparent)}
+.student-table .table-row{border:1px solid rgba(15,23,36,0.04);background:var(--card)}
+.student-name b{display:block;color:#0f1724}
+.student-name small{color:var(--muted)}
+
+.notice{background:linear-gradient(90deg,#e6f0ff,#ffffff);border-left:4px solid var(--accent);color:#0b3a75;padding:10px 14px;border-radius:8px;margin:10px 0}
+
+/* refine empty states */
+.empty-state{display:flex;flex-direction:column;align-items:center;gap:10px;padding:28px;background:linear-gradient(180deg,var(--card),#fbfdff);border-radius:12px;border:1px dashed rgba(15,23,36,0.04)}
+
+/* form focused states */
+input:focus,textarea:focus,select:focus{outline:none;box-shadow:0 6px 18px rgba(37,99,235,0.08);border-color:var(--accent)}
+
+/* compact helpers */
+.mini-grid{display:flex;gap:12px}.mini-card{background:var(--card);padding:14px;border-radius:10px;box-shadow:var(--shadow-1);min-width:160px}
+
+/* small screens tweaks */
+@media(max-width:700px){
+  .login-card,.student-card{width:100%;padding:14px}
+  .app{grid-template-columns:1fr}
+  .sidebar{position:relative;transform:none;width:100%;height:auto}
+}
+
+.school-icon-img{width:44px;height:44px;border-radius:10px;object-fit:cover}
+.school-icon{width:44px;height:44px;border-radius:10px;display:grid;place-items:center;background:linear-gradient(180deg,#f6f9ff,#ffffff);font-weight:700}
+

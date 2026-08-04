@@ -1,0 +1,16 @@
+[Unit]
+Description=EduManage Node App
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/home/youruser/school-management-
+Environment=NODE_ENV=production
+Environment=PORT=5000
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

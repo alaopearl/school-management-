@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const db = require('../database');
 require('dotenv').config();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key';
@@ -10,11 +11,26 @@ const authenticateToken = (req, res, next) => {
     }
 
     const token = authHeader.split(' ')[1];
-    jwt.verify(token, JWT_SECRET, (err, payload) => {
+    jwt.verify(token, JWT_SECRET, async (err, payload) => {
         if (err) {
             return res.status(401).json({ error: 'Invalid or expired token' });
         }
 
+        if (payload.role !== 'SUPER_ADMIN' && payload.school_id) {
+            try {
+                const school = await db.getSchoolById(payload.school_id);
+                if (!school || school.login_enabled === 0 || ['PENDING_APPROVAL', 'SUSPENDED', 'REJECTED'].includes(school.status)) {
+                    return res.status(403).json({ error: 'This school account is not permitted to access the platform.' });
+                }
+                const expired = school.status === 'SUBSCRIPTION_EXPIRED' || (school.subscription_expires_at && new Date(school.subscription_expires_at) < new Date());
+                if (expired && !req.originalUrl.startsWith('/api/plans/')) {
+                    return res.status(402).json({ error: 'Subscription expired. Billing access only.', code: 'SUBSCRIPTION_EXPIRED' });
+                }
+                req.school = school;
+            } catch (error) {
+                return res.status(500).json({ error: 'Unable to validate school access' });
+            }
+        }
         req.user = payload;
         next();
     });

@@ -4,7 +4,7 @@ services:
     env: node
     plan: free
     branch: main
-    buildCommand: npm install
+    buildCommand: npm install && npm run build
     startCommand: npm start
     envVars:
       - key: DATABASE_PATH
@@ -13,3 +13,17 @@ services:
         value: replace-with-your-secret
       - key: JWT_EXPIRES_IN
         value: 1d
+      - key: SMTP_HOST
+        value: smtp.example.com
+      - key: SMTP_PORT
+        value: 587
+      - key: SMTP_USER
+        value: your-smtp-user@example.com
+      - key: SMTP_PASS
+        value: your-smtp-password
+      - key: SMTP_FROM
+        value: School Admin <no-reply@example.com>
+      - key: SUPPORT_EMAIL
+        value: support@example.com
+      - key: CLOUDINARY_URL
+        value: ''

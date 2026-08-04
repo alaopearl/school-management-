@@ -31,13 +31,29 @@ npm install
 
 ## Configuration
 
-Create or modify the `.env` file in the backend directory:
+Create or modify the `.env` file in the backend directory or root workspace directory:
 
 ```env
 PORT=5000
 NODE_ENV=development
 DATABASE_PATH=./students.db
+JWT_SECRET=replace-with-your-secret
+JWT_EXPIRES_IN=1d
+
+# SMTP settings for OTP and support email delivery
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=your-smtp-user@example.com
+SMTP_PASS=your-smtp-password
+SMTP_FROM=School Admin <no-reply@example.com>
+SUPPORT_EMAIL=support@example.com
+GMAIL_APP_PASSWORD=your-gmail-app-password
+
+# Optional Cloudinary image hosting for uploads
+CLOUDINARY_URL=cloudinary://api_key:api_secret@cloud_name
 ```
+
+If you run only the backend server from `backend/`, put `.env` in the backend directory. If you run from the repo root with `server.js`, use the root `.env`.
 
 ## Running the Server
 

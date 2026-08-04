@@ -8,7 +8,7 @@ const socketModule = require('./backend/socket');
 const notificationWorker = require('./backend/workers/notificationWorker');
 
 const PORT = process.env.PORT || 5000;
-const PUBLIC_DIR = path.join(__dirname, 'frontend');
+const PUBLIC_DIR = path.join(__dirname, 'dist');
 
 const app = express();
 

@@ -157,67 +157,94 @@ router.post('/setup-super-admin', async (req, res) => {
     }
 });
 
-// Public endpoint: Register a new school with OTP verification
+// Public endpoint: Register a new school and school administrator account
 router.post('/register-school', async (req, res) => {
     try {
-        const { schoolName, schoolCode, email, phone, principalName, address, schoolType, otp } = req.body;
-        
-        if (!schoolName || !schoolCode || !email) {
-            return res.status(400).json({ error: 'School name, code, and email are required' });
+        const { schoolName, schoolCode, email, phone, principalName, principalPhone, principalEmail, address, state, country, schoolType, motto, website, logoUrl, primaryColor, secondaryColor, numberOfStudents, numberOfStaff, administratorName, administratorEmail, administratorPassword, otp } = req.body;
+
+        if (!schoolName || !schoolCode || !email || !administratorName || !administratorEmail || !administratorPassword) {
+            return res.status(400).json({ error: 'School name, code, official email, and administrator credentials are required' });
         }
 
         const normalizedEmail = email.toLowerCase();
-        
-        // If OTP is provided, verify it
+        const normalizedAdminEmail = administratorEmail.toLowerCase();
+        if (await db.getUserByEmail(normalizedAdminEmail)) {
+            return res.status(409).json({ error: 'Administrator email is already registered' });
+        }
+
         if (otp) {
             const verification = otpService.verifyOtpCode(normalizedEmail, otp);
             if (!verification.valid) {
                 return res.status(401).json({ error: verification.message });
             }
-            
-            // OTP verified, proceed with school creation
-            const existingSchool = await db.getSchoolByCode(schoolCode);
-            if (existingSchool) {
-                return res.status(409).json({ error: 'School code already exists' });
-            }
+        }
 
-            const school = await db.createSchool({
+        const existingSchool = await db.getSchoolByCode(schoolCode);
+        if (existingSchool) {
+            return res.status(409).json({ error: 'School code already exists' });
+        }
+
+        const school = await db.createSchool({
+            id: uuidv4(),
+            name: schoolName,
+            code: schoolCode,
+            email: normalizedEmail,
+            phone: phone || null,
+            motto: motto || null,
+            address: address || null,
+            website: website || null,
+            principal_name: principalName || null,
+            principal_phone: principalPhone || null,
+            school_type: schoolType || null,
+            logo_url: logoUrl || null,
+            primary_color: primaryColor || '#2563EB',
+            secondary_color: secondaryColor || '#1E40AF',
+            session_system: 'TERM',
+            status: 'PENDING_APPROVAL',
+            subscription_plan: 'FREE',
+            settings: JSON.stringify({ theme: 'light', language: 'en' })
+        });
+
+        await db.updateSchool(school.id, {
+            state: state || null,
+            country: country || null,
+            principal_email: principalEmail || null,
+            student_count_estimate: numberOfStudents || null,
+            staff_count_estimate: numberOfStaff || null,
+            login_enabled: 0
+        });
+
+        await db.createUser({
+            id: uuidv4(),
+            school_id: school.id,
+            email: normalizedAdminEmail,
+            password: await bcrypt.hash(administratorPassword, SALT_ROUNDS),
+            full_name: administratorName,
+            phone: principalPhone || phone || null,
+            role: 'SCHOOL_ADMIN',
+            status: 'PENDING_APPROVAL'
+        });
+
+        const superAdmin = await db.getSuperAdmin();
+        if (superAdmin) {
+            await db.createNotification({
                 id: uuidv4(),
-                name: schoolName,
-                code: schoolCode,
-                email: normalizedEmail,
-                phone: phone || null,
-                motto: null,
-                address: address || null,
-                website: null,
-                principal_name: principalName || null,
-                principal_phone: null,
-                school_type: schoolType || null,
-                logo_url: null,
-                primary_color: '#3B82F6',
-                secondary_color: '#1E40AF',
-                session_system: 'TERM',
-                status: 'ACTIVE',
-                subscription_plan: 'STANDARD',
-                settings: JSON.stringify({ theme: 'light', language: 'en' })
-            });
-
-            return res.status(201).json({ 
-                success: true, 
-                message: 'School registered successfully',
-                data: school 
-            });
-        } else {
-            // First step: Send OTP to school email
-            const { sent, otp: generatedOtp } = await otpService.sendOtpToEmail(normalizedEmail);
-            
-            return res.json({
-                success: true,
-                message: sent ? 'OTP sent to your email. Please check your inbox.' : 'OTP generated (check console in development)',
-                requiresOtp: true,
-                otp: process.env.NODE_ENV === 'development' ? generatedOtp : undefined
+                school_id: null,
+                recipient_id: superAdmin.id,
+                recipient_type: 'USER',
+                subject: 'New school registration awaiting approval',
+                message: `${school.name} has registered and is awaiting approval.`,
+                type: 'SCHOOL_REGISTRATION',
+                channel: 'IN_APP',
+                sent_by: null
             });
         }
+
+        return res.status(201).json({
+            success: true,
+            message: 'School registration submitted successfully. Your account is awaiting approval from the platform administrator.',
+            data: { ...school, status: 'PENDING_APPROVAL' }
+        });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -241,6 +268,15 @@ router.post('/login', async (req, res) => {
         }
 
         const school = user.school_id ? await db.getSchoolById(user.school_id) : null;
+        if (user.status !== 'ACTIVE') {
+            return res.status(403).json({ error: 'Your user account is not active. Please contact your school administrator.' });
+        }
+        if (school) {
+            if (school.status === 'PENDING_APPROVAL') return res.status(403).json({ error: 'Your account is awaiting approval from the platform administrator.', code: 'PENDING_APPROVAL' });
+            if (school.status === 'SUSPENDED' || school.login_enabled === 0) return res.status(403).json({ error: 'This school account has been suspended. Please contact platform support.', code: 'SUSPENDED' });
+            if (school.status === 'REJECTED') return res.status(403).json({ error: 'This school registration was not approved. Please contact platform support.', code: 'REJECTED' });
+            if (school.status === 'SUBSCRIPTION_EXPIRED' || (school.subscription_expires_at && new Date(school.subscription_expires_at) < new Date())) return res.status(403).json({ error: 'This school subscription has expired. Please renew to restore access.', code: 'SUBSCRIPTION_EXPIRED' });
+        }
         const token = generateToken(user);
 
         res.json({
@@ -271,7 +307,8 @@ router.get('/me', authenticateToken, async (req, res) => {
         }
 
         const school = user.school_id ? await db.getSchoolById(user.school_id) : null;
-        res.json({ success: true, data: { user, school } });
+        const { password, ...safeUser } = user;
+        res.json({ success: true, data: { user: safeUser, school } });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -284,6 +321,10 @@ router.post('/register-user', authenticateToken, authorizeRoles('SUPER_ADMIN', '
         if (!email || !password || !fullName || !role) {
             return res.status(400).json({ error: 'Missing required fields' });
         }
+        const tenantRoles = ['SCHOOL_ADMIN', 'TEACHER', 'ACCOUNTANT', 'LIBRARIAN', 'PARENT', 'STUDENT'];
+        if (!tenantRoles.includes(role)) {
+            return res.status(403).json({ error: 'This role cannot be created through the school user endpoint' });
+        }
 
         const normalizedEmail = email.toLowerCase();
         const existing = await db.getUserByEmail(normalizedEmail);
@@ -292,9 +333,10 @@ router.post('/register-user', authenticateToken, authorizeRoles('SUPER_ADMIN', '
         }
 
         const school_id = req.user.role === 'SUPER_ADMIN' ? schoolId || null : req.user.school_id;
-        if (req.user.role !== 'SUPER_ADMIN' && !school_id) {
+        if (!school_id) {
             return res.status(403).json({ error: 'School context required' });
         }
+        if (!await db.getSchoolById(school_id)) return res.status(404).json({ error: 'School not found' });
 
         const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
         const user = await db.createUser({

@@ -1,11 +1,12 @@
 {
   "name": "student-management-app",
   "version": "1.0.0",
-  "description": "Student Record Tracker application with Express backend and static frontend",
+  "description": "Student Record Tracker application with a React frontend and Express backend",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "concurrently \"nodemon server.js\" \"vite --host 0.0.0.0\"",
+    "build": "vite build"
   },
   "keywords": [
     "student",
@@ -31,7 +32,12 @@
     "nodemailer": "^6.9.3",
     "sqlite3": "^5.1.6",
     "uuid": "^9.0.0",
-    "socket.io": "^4.7.2"
+    "socket.io": "^4.7.2",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "vite": "^6.0.7"
   },
   "devDependencies": {
     "nodemon": "^2.0.20"

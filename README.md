@@ -1,11 +1,11 @@
 # Student Management App
 
-This repository contains a student record tracking application with a Node.js/Express backend and a static frontend.
+This repository contains a student record tracking application with a Node.js/Express backend and a React frontend.
 
 ## Repository structure
 
 - `backend/` — Express app source, database setup, middleware, and API routes
-- `frontend/` — Static UI assets, including `index.html`, `script.js`, and `style.css`
+- `src/` — React application source and responsive UI styles
 - `server.js` — Root entrypoint that serves the frontend and backend together
 - `package.json` — Root Node.js manifest for deployment on Render
 - `.env.example` — Recommended environment variables
@@ -28,17 +28,29 @@ cp .env.example .env
 
 The app will run on `http://localhost:5000`.
 
-### OTP email settings
+For frontend development with hot reload, use `npm run dev`. The React app runs at `http://localhost:5173` and proxies API requests to Express. Run `npm run build` before `npm start` to create the production bundle in `dist/`.
 
-To send OTPs via email, set the following in `.env`:
+### Email settings
+
+To send OTPs and support tickets via email, set the following in `.env`:
 
 - `SMTP_HOST`
 - `SMTP_PORT`
 - `SMTP_USER`
 - `SMTP_PASS`
 - `SMTP_FROM`
+- `SUPPORT_EMAIL`
+- `GMAIL_APP_PASSWORD` (optional fallback when SMTP is unavailable)
 
-If SMTP is not configured, OTPs still work in development and are logged to the console.
+If SMTP is not configured, OTPs still work in development and are logged to the console, and support tickets are accepted but not emailed.
+
+### Optional image uploads
+
+If you want hosted logo uploads, set:
+
+- `CLOUDINARY_URL`
+
+When configured, image uploads are sent to Cloudinary instead of local storage.
 
 ## Render deployment
 

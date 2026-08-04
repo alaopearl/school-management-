@@ -35,6 +35,19 @@ app.use(cors());
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true }));
 
+// Small in-memory rate limiter for authentication endpoints. Use a shared store
+// (Redis, etc.) when deploying more than one server instance.
+const authAttempts = new Map();
+app.use('/api/auth', (req, res, next) => {
+    const key = `${req.ip}:${req.path}`;
+    const now = Date.now();
+    const entry = authAttempts.get(key) || { count: 0, startedAt: now };
+    if (now - entry.startedAt > 15 * 60 * 1000) { entry.count = 0; entry.startedAt = now; }
+    entry.count += 1; authAttempts.set(key, entry);
+    if (entry.count > 60) return res.status(429).json({ error: 'Too many requests. Please try again later.' });
+    next();
+});
+
 app.use((req, res, next) => {
     const startedAt = Date.now();
     res.on('finish', async () => {
