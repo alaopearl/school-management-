@@ -4,11 +4,11 @@ services:
     env: node
     plan: free
     branch: main
-    buildCommand: npm install && npm run build
+    buildCommand: npm install && npm --workspace frontend run build && npm --workspace backend run build || true
     startCommand: npm start
     envVars:
       - key: DATABASE_PATH
-        value: /data/students.db
+        value: ./students.db
       - key: JWT_SECRET
         value: replace-with-your-secret
       - key: JWT_EXPIRES_IN

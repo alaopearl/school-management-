@@ -1,4 +1,5 @@
 const path = require('path');
+const fs = require('fs');
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -8,14 +9,36 @@ const socketModule = require('./backend/socket');
 const notificationWorker = require('./backend/workers/notificationWorker');
 
 const PORT = process.env.PORT || 5000;
-const PUBLIC_DIR = path.join(__dirname, 'dist');
+// Resolve frontend build output from common locations so deploys from different
+// build contexts (root or /src) still work on hosts like Render.
+const publicCandidates = [
+  path.join(__dirname, 'frontend', 'dist'),
+  path.join(__dirname, 'dist'),
+  path.join(__dirname, 'src', 'dist')
+];
+let PUBLIC_DIR = publicCandidates.find((p) => fs.existsSync(p));
+if (!PUBLIC_DIR) {
+  // default to first candidate; file requests will 404 but we log helpful info
+  PUBLIC_DIR = publicCandidates[0];
+  console.warn(`Frontend build not found in ${publicCandidates.join(', ')}. Serving API only.`);
+} else {
+  console.log(`Serving static files from ${PUBLIC_DIR}`);
+}
 
 const app = express();
 
-app.use(express.static(PUBLIC_DIR));
-app.get('/', (req, res) => {
-  res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
-});
+if (fs.existsSync(PUBLIC_DIR)) {
+  app.use(express.static(PUBLIC_DIR));
+  app.get('/', (req, res) => {
+    const indexFile = path.join(PUBLIC_DIR, 'index.html');
+    if (fs.existsSync(indexFile)) return res.sendFile(indexFile);
+    // if index missing, return helpful text
+    return res.status(200).send('Frontend build not found. Please run the build and redeploy.');
+  });
+} else {
+  // No frontend build available — continue serving backend routes only
+  app.get('/', (req, res) => res.status(200).send('Backend running. Frontend build not present on server.'));
+}
 
 app.use(backendApp);
 

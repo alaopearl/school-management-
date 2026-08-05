@@ -1,12 +1,17 @@
 {
-  "name": "student-management-app",
+  "name": "student-management",
   "version": "1.0.0",
-  "description": "Student Record Tracker application with a React frontend and Express backend",
+  "private": true,
+  "description": "Monorepo for student management frontend and backend",
   "main": "server.js",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
   "scripts": {
     "start": "node server.js",
-    "dev": "concurrently \"nodemon server.js\" \"vite --host 0.0.0.0\"",
-    "build": "vite build"
+    "dev": "concurrently \"npm --workspace backend run dev\" \"npm --workspace frontend run dev\"",
+    "build": "npm --workspace frontend run build"
   },
   "keywords": [
     "student",
@@ -18,26 +23,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-  "multer": "^1.4.4",
-  "cloudinary": "^2.1.0",
-  "streamifier": "^0.1.1",
-  "pdfkit": "^0.13.0",
-    "bcrypt": "^5.1.0",
-    "body-parser": "^1.20.2",
-    "cors": "^2.8.5",
-    "dotenv": "^16.0.3",
-    "express": "^4.18.2",
-    "helmet": "^7.0.0",
-    "jsonwebtoken": "^9.0.0",
-    "nodemailer": "^6.9.3",
-    "sqlite3": "^5.1.6",
-    "uuid": "^9.0.0",
-    "socket.io": "^4.7.2",
-    "@vitejs/plugin-react": "^4.3.4",
-    "concurrently": "^9.1.2",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "vite": "^6.0.7"
+    "concurrently": "^9.1.2"
   },
   "devDependencies": {
     "nodemon": "^2.0.20"

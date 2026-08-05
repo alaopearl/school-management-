@@ -1,16 +1,41 @@
 const sqlite3 = require('sqlite3').verbose();
 const bcrypt = require('bcrypt');
 const path = require('path');
+const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 require('dotenv').config();
 
-const databaseFile = process.env.DATABASE_PATH || './students.db';
-const dbPath = path.join(__dirname, databaseFile);
+// Determine candidate DB path (respect absolute paths)
+let databaseFile = process.env.DATABASE_PATH || './students.db';
+let dbPathCandidate = path.isAbsolute(databaseFile) ? databaseFile : path.join(__dirname, databaseFile);
+
+function ensureWritablePath(candidate) {
+    try {
+        const dir = path.dirname(candidate);
+        fs.mkdirSync(dir, { recursive: true });
+        fs.accessSync(dir, fs.constants.W_OK);
+        return candidate;
+    } catch (err) {
+        console.warn(`Database path ${candidate} not writable or invalid: ${err.message}`);
+        const fallback = path.join(__dirname, 'students.db');
+        try {
+            fs.mkdirSync(path.dirname(fallback), { recursive: true });
+            fs.accessSync(path.dirname(fallback), fs.constants.W_OK);
+            console.warn(`Using fallback database path: ${fallback}`);
+            return fallback;
+        } catch (err2) {
+            console.error(`Fallback DB path also not writable: ${err2.message}. Using in-memory database.`);
+            return ':memory:';
+        }
+    }
+}
+
+const dbPath = ensureWritablePath(dbPathCandidate);
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
         console.error('Error opening database:', err);
     } else {
-        console.log('Connected to SQLite database');
+        console.log(`Connected to SQLite database at ${dbPath}`);
     }
 });
 
