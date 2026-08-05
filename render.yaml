@@ -4,8 +4,8 @@ services:
     env: node
     plan: free
     branch: main
-    buildCommand: npm install && npm --workspace frontend run build && npm --workspace backend run build || true
-    startCommand: npm start
+    buildCommand: npm install && npm --workspace frontend run build && npm --workspace backend install
+    startCommand: npm --workspace backend start
     envVars:
       - key: DATABASE_PATH
         value: ./students.db
