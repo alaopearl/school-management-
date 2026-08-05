@@ -16,11 +16,21 @@ const publicCandidates = [
   path.join(__dirname, 'dist'),
   path.join(__dirname, 'src', 'dist')
 ];
-let PUBLIC_DIR = publicCandidates.find((p) => fs.existsSync(p));
+let PUBLIC_DIR = null;
+// prefer a candidate that actually contains an index.html
+for (const p of publicCandidates) {
+  try {
+    const indexFile = path.join(p, 'index.html');
+    if (fs.existsSync(indexFile)) {
+      PUBLIC_DIR = p;
+      break;
+    }
+  } catch (e) {
+    // ignore
+  }
+}
 if (!PUBLIC_DIR) {
-  // default to first candidate; file requests will 404 but we log helpful info
-  PUBLIC_DIR = publicCandidates[0];
-  console.warn(`Frontend build not found in ${publicCandidates.join(', ')}. Serving API only.`);
+  console.warn(`No frontend index.html found in ${publicCandidates.join(', ')}. Serving API only.`);
 } else {
   console.log(`Serving static files from ${PUBLIC_DIR}`);
 }

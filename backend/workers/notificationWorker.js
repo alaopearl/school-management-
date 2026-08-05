@@ -68,7 +68,17 @@ async function sendWhatsApp(notification) {
 async function processPending() {
     try {
         // process per-user recipients queue
-        const recipients = await db.listPendingRecipients(100);
+        let recipients = [];
+        try {
+            recipients = await db.listPendingRecipients(100);
+        } catch (err) {
+            // If the DB schema isn't ready yet (tables missing), skip processing.
+            if (err && err.message && err.message.toLowerCase().includes('no such table')) {
+                console.warn('Notification worker: DB schema not ready, skipping this run.');
+                return;
+            }
+            throw err;
+        }
         for (const r of recipients) {
             try {
                 // build a small notification object
@@ -127,6 +137,11 @@ async function processPending() {
             }
         }
     } catch (err) {
+        // Avoid noisy failures when DB not ready; surface other errors.
+        if (err && err.message && err.message.toLowerCase().includes('no such table')) {
+            console.warn('Notification worker error (schema missing):', err.message);
+            return;
+        }
         console.error('Notification worker error:', err.message);
     }
 }
