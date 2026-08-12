@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 const navItems = [
-  ['overview', 'Overview', '⌂'], ['students', 'Students', '♙'], ['staff', 'Staff', '👥'], ['attendance', 'Attendance', '✓'],
+  ['overview', 'Overview', '⌂'], ['students', 'Students', '♙'], ['student-detail', 'Student detail', '📘'], ['calendar', 'Calendar', '📅'], ['staff', 'Staff', '👥'], ['attendance', 'Attendance', '✓'],
   ['academics', 'Academics', '▣'], ['finance', 'Finance', '₦'], ['messages', 'Messages', '✉'],
-  ['parent-portal', 'Parent portal', '◔'], ['settings', 'Settings', '⚙']
+  ['parent-portal', 'Parent portal', '◔'], ['student-portal', 'Student', '🎓'], ['settings', 'Settings', '⚙']
 ];
 
 const demoStudents = [];
@@ -28,12 +28,22 @@ const todayIso = () => new Date().toISOString().slice(0, 10);
 const getStudentId = (student) => student?.id || student?.student_id || student?.student_code || '';
 const getStudentName = (student) => student?.full_name || student?.name || 'Unnamed student';
 const getStudentClass = (student) => student?.current_level || student?.currentLevel || student?.grade || 'Unassigned';
-const getStudentGuardian = (student) => student?.parent_name || student?.guardian || 'Not set';
+const getStudentGuardian = (student) => student?.parent_name || student?.guardian || student?.guardian_name || 'Not set';
+const getStudentGuardianContact = (student) => student?.parent_contact || student?.guardian_contact || student?.parentContact || student?.guardianContact || 'Not provided';
 const queryString = (params = {}) => {
   const entries = Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '');
   if (!entries.length) return '';
   return `?${entries.map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`).join('&')}`;
 };
+
+const parseSettings = (settings) => {
+  if (!settings) return {};
+  if (typeof settings === 'string') {
+    try { return JSON.parse(settings); } catch { return {}; }
+  }
+  return settings;
+};
+
 const schoolBody = (user) => (user?.role === 'SUPER_ADMIN' && user?.school_id ? { school_id: user.school_id } : {});
 const schoolQuery = (user) => (user?.role === 'SUPER_ADMIN' && user?.school_id ? { school_id: user.school_id } : {});
 
@@ -51,15 +61,23 @@ function App() {
   const [students, setStudents] = useState([]);
   const [search, setSearch] = useState('');
   const [loginOpen, setLoginOpen] = useState(false);
-  const [setupMode, setSetupMode] = useState(false);
-  const [needsSetup, setNeedsSetup] = useState(false);
+  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotOtp, setForgotOtp] = useState('');
+  const [forgotNewPassword, setForgotNewPassword] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotMessage, setForgotMessage] = useState('');
+  const [forgotError, setForgotError] = useState('');
+  // Dev-only role switcher (visible on localhost when not signed in)
+  const isDevHost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname === '');
+  const [devRole, setDevRole] = useState('');
   const [login, setLogin] = useState({ email: '', password: '' });
-  const [setup, setSetup] = useState({ fullName: '', email: '', password: '', phone: '' });
   const [loginError, setLoginError] = useState('');
   const [notice, setNotice] = useState('');
   const [studentModal, setStudentModal] = useState(false);
   const [studentError, setStudentError] = useState('');
   const [savingStudent, setSavingStudent] = useState(false);
+  const [selectedStudentId, setSelectedStudentId] = useState('');
   const [schoolForm, setSchoolForm] = useState({
     schoolName: '',
     schoolCode: '',
@@ -92,6 +110,7 @@ function App() {
     admission_date: '',
     parent_name: '',
     parent_contact: '',
+    parent_email: '',
     address: '',
     gpa: ''
   });
@@ -104,8 +123,10 @@ function App() {
 
   const visibleNavItems = useMemo(() => navItems.filter(([key]) => {
     if (key === 'parent-portal') return user?.role === 'PARENT';
+    if (key === 'student-portal') return user?.role === 'STUDENT';
+    if (key === 'student-detail') return !!selectedStudentId;
     return true;
-  }), [user?.role]);
+  }), [user?.role, selectedStudentId]);
 
   useEffect(() => {
     if (!token) return;
@@ -124,18 +145,22 @@ function App() {
   }, [token]);
 
   useEffect(() => {
+    // Apply a local dev role for preview when not signed in
+    if (!isDevHost) return;
+    if (devRole && !token) {
+      setUser({
+        full_name: `${devRole === 'PARENT' ? 'Parent' : devRole === 'STUDENT' ? 'Student' : devRole === 'SCHOOL_ADMIN' ? 'School Admin' : devRole === 'DEVELOPER' ? 'Developer' : 'Dev'} User`,
+        role: devRole
+      });
+    } else if (!devRole && !token) {
+      setUser(null);
+    }
+  }, [devRole, isDevHost, token]);
+
+  useEffect(() => {
     const base = school?.name || 'EduManage';
     try { document.title = `${base} • EduManage`; } catch (e) {}
   }, [school?.name]);
-
-  useEffect(() => {
-    api('/auth/setup-status')
-      .then(({ hasSuperAdmin }) => {
-        setNeedsSetup(!hasSuperAdmin);
-        if (!hasSuperAdmin) setSetupMode(true);
-      })
-      .catch(() => {});
-  }, []);
 
   useEffect(() => {
     const updateIsMobile = () => {
@@ -207,6 +232,13 @@ function App() {
     setCollapsed((current) => !current);
   };
 
+  const viewStudentDetails = (student) => {
+    const id = getStudentId(student);
+    if (!id) return;
+    setSelectedStudentId(id);
+    setActive('student-detail');
+  };
+
   const visibleStudents = useMemo(() => {
     const displayRows = students.length
       ? students.map((student, index) => ({
@@ -243,23 +275,6 @@ function App() {
     }
   };
 
-  const onSetup = async (event) => {
-    event.preventDefault();
-    setLoginError('');
-    try {
-      const { data } = await api('/auth/setup-super-admin', null, { method: 'POST', body: JSON.stringify(setup) });
-      localStorage.setItem('sms_auth_token', data.token);
-      setToken(data.token);
-      setUser(data.user);
-      setSchool(data.school || null);
-      setNeedsSetup(false);
-      setLoginOpen(false);
-      setNotice('Your administrator account is ready.');
-    } catch (error) {
-      setLoginError(error.message);
-    }
-  };
-
   const submitSchoolRegistration = async (event) => {
     event.preventDefault();
     setCreatingSchool(true);
@@ -283,23 +298,11 @@ function App() {
         administratorName: schoolForm.administratorName,
         administratorEmail: schoolForm.administratorEmail,
         administratorPassword: schoolForm.administratorPassword,
-        otp: schoolForm.otp || otpCode
+        // OTP intentionally omitted from signup
       };
 
-      if (!otpSent) {
-        setSchoolCreationError('Please verify your official school email with the OTP before submitting.');
-        setCreatingSchool(false);
-        return;
-      }
-
-      // Server-side verify OTP before proceeding
-      try {
-        await api('/otp/verify-otp', null, { method: 'POST', body: JSON.stringify({ email: schoolForm.email, otp: body.otp }) });
-      } catch (err) {
-        setSchoolCreationError(`OTP verification failed: ${err.message}`);
-        setCreatingSchool(false);
-        return;
-      }
+      // Remove OTP requirement during signup: allow registration without email verification
+      // (OTP is only used in forgot-password flows)
 
       const response = await api('/auth/register-school', null, {
         method: 'POST',
@@ -365,6 +368,39 @@ function App() {
     }
   };
 
+  const sendPasswordResetOtp = async (email) => {
+    setForgotError('');
+    setForgotMessage('');
+    setForgotLoading(true);
+    try {
+      const resp = await api('/otp/send-otp', null, { method: 'POST', body: JSON.stringify({ email }) });
+      setForgotMessage(resp.message || 'OTP sent to email');
+    } catch (err) {
+      setForgotError(err.message);
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const verifyPasswordResetAndApply = async () => {
+    setForgotError('');
+    setForgotMessage('');
+    if (!forgotEmail) return setForgotError('Please enter your email');
+    if (!forgotOtp) return setForgotError('Enter the OTP sent to your email');
+    if (!forgotNewPassword) return setForgotError('Enter a new password');
+    setForgotLoading(true);
+    try {
+      await api('/auth/reset-password', null, { method: 'POST', body: JSON.stringify({ email: forgotEmail, otp: forgotOtp, newPassword: forgotNewPassword }) });
+      setForgotMessage('Password reset successful. You can now sign in.');
+      setForgotPasswordOpen(false);
+      setLoginOpen(true);
+    } catch (err) {
+      setForgotError(err.message);
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
   const logout = () => {
     localStorage.removeItem('sms_auth_token');
     setToken(null);
@@ -416,6 +452,7 @@ function App() {
         admission_date: '',
         parent_name: '',
         parent_contact: '',
+        parent_email: '',
         address: '',
         gpa: ''
       });
@@ -489,15 +526,33 @@ function App() {
             <button className="icon-button">◔<i></i></button>
             <button className="bell">♧<i></i></button>
             {user ? <button className="user-button" onClick={logout}>Sign out</button> : <button className="user-button" onClick={() => setLoginOpen(true)}>Sign in</button>}
+            {/* Dev-only role switcher (localhost only, and only when not authenticated) */}
+            {isDevHost && !token && (
+              <div className="dev-role">
+                <label style={{fontSize:12,color:'#475569'}}>Dev role</label>
+                <select value={devRole} onChange={(e) => setDevRole(e.target.value)}>
+                  <option value="">None</option>
+                  <option value="PARENT">PARENT</option>
+                  <option value="STUDENT">STUDENT</option>
+                  <option value="SCHOOL_ADMIN">SCHOOL_ADMIN</option>
+                  <option value="DEVELOPER">DEVELOPER</option>
+                </select>
+              </div>
+            )}
           </div>
         </header>
 
         {notice && <div className="notice">{notice}<button onClick={() => setNotice('')}>×</button></div>}
         <div className="page-content">
-          {active === 'overview'
-                    ? <Overview setActive={setActive} students={visibleStudents} user={user} token={token} school={school} openStudentForm={openStudentForm} />
-            : <Workspace active={active} directoryStudents={visibleStudents} students={students} search={search} setSearch={setSearch} openStudentForm={openStudentForm} token={token} user={user} school={school} setNotice={setNotice} />
-          }
+          {active === 'overview' ? (
+            <Overview setActive={setActive} students={visibleStudents} user={user} token={token} school={school} openStudentForm={openStudentForm} onViewDetails={viewStudentDetails} />
+          ) : active === 'parent-portal' ? (
+            user?.role === 'PARENT' ? <ParentLanding token={token} user={user} /> : <div className="panel">Access restricted</div>
+          ) : active === 'student-portal' ? (
+            user?.role === 'STUDENT' ? <StudentLanding /> : <div className="panel">Access restricted</div>
+          ) : (
+            <Workspace active={active} directoryStudents={visibleStudents} students={students} search={search} setSearch={setSearch} openStudentForm={openStudentForm} token={token} user={user} school={school} selectedStudentId={selectedStudentId} setSelectedStudentId={setSelectedStudentId} setNotice={setNotice} />
+          )}
         </div>
       </main>
 
@@ -505,32 +560,23 @@ function App() {
 
       {loginOpen && (
         <div className="modal-layer">
-          <form className="login-card" onSubmit={setupMode ? onSetup : onLogin}>
+          <form className="login-card" onSubmit={onLogin}>
             <button type="button" className="close" onClick={() => setLoginOpen(false)}>×</button>
             <div className="brand compact">
               <div className="brand-mark"><span></span><span></span><span></span></div>
               <strong>edu<span>manage</span></strong>
             </div>
-            {setupMode ? (
-              <>
-                <h2>Set up your school</h2>
-                <p>Create the first administrator account to get started.</p>
-                <label>Full name<input value={setup.fullName} onChange={(e) => setSetup({ ...setup, fullName: e.target.value })} required placeholder="Your full name" /></label>
-                <label>Email<input type="email" value={setup.email} onChange={(e) => setSetup({ ...setup, email: e.target.value })} required placeholder="admin@school.edu" /></label>
-                <label>Password<input type="password" value={setup.password} onChange={(e) => setSetup({ ...setup, password: e.target.value })} required placeholder="Create a secure password" /></label>
-                <label>Phone <small>(optional)</small><input type="tel" value={setup.phone} onChange={(e) => setSetup({ ...setup, phone: e.target.value })} placeholder="08000000000" /></label>
-              </>
-            ) : (
-              <>
-                <h2>Welcome back</h2>
-                <p>Sign in to manage your school workspace.</p>
-                <label>Email<input type="email" value={login.email} onChange={(e) => setLogin({ ...login, email: e.target.value })} required placeholder="you@school.edu" /></label>
-                <label>Password<input type="password" value={login.password} onChange={(e) => setLogin({ ...login, password: e.target.value })} required placeholder="••••••••" /></label>
-              </>
-            )}
+            <>
+              <h2>Welcome back</h2>
+              <p>Sign in to manage your school workspace.</p>
+              <label>Email<input type="email" value={login.email} onChange={(e) => setLogin({ ...login, email: e.target.value })} required placeholder="you@school.edu" /></label>
+              <label>Password<input type="password" value={login.password} onChange={(e) => setLogin({ ...login, password: e.target.value })} required placeholder="••••••••" /></label>
+              <div style={{marginTop:8}}>
+                <button type="button" className="switch-auth" onClick={() => { setForgotPasswordOpen(true); setLoginOpen(false); }}>Forgot password?</button>
+              </div>
+            </>
             {loginError && <div className="form-error">{loginError}</div>}
-            <button className="primary" type="submit">{setupMode ? 'Create administrator account →' : 'Sign in to dashboard →'}</button>
-            {!needsSetup && <button type="button" className="switch-auth" onClick={() => { setSetupMode(!setupMode); setLoginError(''); }}>{setupMode ? 'Already have an account? Sign in' : 'Set up a new school'}</button>}
+            <button className="primary" type="submit">Sign in to dashboard →</button>
           </form>
         </div>
       )}
@@ -548,17 +594,7 @@ function App() {
                 <label>Official email<input type="email" value={schoolForm.email} onChange={(e) => setSchoolForm({ ...schoolForm, email: e.target.value })} required /></label>
                 <label>Phone<input value={schoolForm.phone} onChange={(e) => setSchoolForm({ ...schoolForm, phone: e.target.value })} /></label>
               </div>
-              <div style={{display:'flex',gap:12,alignItems:'flex-end'}}>
-                <div style={{flex:1}}>
-                  <label style={{display:'block'}}>Official email verification
-                    <input type="text" value={otpCode} onChange={(e) => setOtpCode(e.target.value)} placeholder="Enter OTP" />
-                  </label>
-                </div>
-                <div style={{display:'flex',gap:8}}>
-                  <button type="button" className="primary" onClick={sendOtpToOfficial} disabled={otpSent}>Send code</button>
-                  <button type="button" className="primary" onClick={verifyOtpForOfficial} disabled={!otpSent || verifyingOtp}>{verifyingOtp ? 'Verifying…' : 'Verify'}</button>
-                </div>
-              </div>
+              {/* OTP removed from signup flow; keep email optional during registration */}
               <div className="ticket-fields">
                 <label>Principal name<input value={schoolForm.principalName} onChange={(e) => setSchoolForm({ ...schoolForm, principalName: e.target.value })} /></label>
                 <label>Principal phone<input value={schoolForm.principalPhone} onChange={(e) => setSchoolForm({ ...schoolForm, principalPhone: e.target.value })} /></label>
@@ -609,6 +645,7 @@ function App() {
               <label>GPA <small>(optional)</small><input type="number" min="0" max="5" step="0.1" value={studentForm.gpa} onChange={(e) => setStudentForm({ ...studentForm, gpa: e.target.value })} /></label>
               <label>Parent / guardian<input value={studentForm.parent_name} onChange={(e) => setStudentForm({ ...studentForm, parent_name: e.target.value })} required /></label>
               <label>Parent phone<input type="tel" value={studentForm.parent_contact} onChange={(e) => setStudentForm({ ...studentForm, parent_contact: e.target.value })} required /></label>
+              <label>Parent email<input type="email" value={studentForm.parent_email} onChange={(e) => setStudentForm({ ...studentForm, parent_email: e.target.value })} placeholder="parent@example.com" /></label>
             </div>
             <label>Address<textarea rows="2" value={studentForm.address} onChange={(e) => setStudentForm({ ...studentForm, address: e.target.value })} required /></label>
             {studentError && <div className="form-error">{studentError}</div>}
@@ -616,11 +653,37 @@ function App() {
           </form>
         </div>
       )}
+
+      {forgotPasswordOpen && (
+        <div className="modal-layer">
+          <form className="login-card" onSubmit={(e) => { e.preventDefault(); verifyPasswordResetAndApply(); }}>
+            <button type="button" className="close" onClick={() => setForgotPasswordOpen(false)}>×</button>
+            <div className="brand compact">
+              <div className="brand-mark"><span></span><span></span><span></span></div>
+              <strong>edu<span>manage</span></strong>
+            </div>
+            <h2>Reset password</h2>
+            <p>Enter your administrator email to receive an OTP and reset your password.</p>
+            <label>Email<input type="email" value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} required placeholder="you@school.edu" /></label>
+            <div style={{display:'flex',gap:8,alignItems:'center'}}>
+              <button type="button" className="primary" onClick={() => sendPasswordResetOtp(forgotEmail)} disabled={forgotLoading}>Send OTP</button>
+              <small style={{color:'#6b7280'}}>{forgotMessage}</small>
+            </div>
+            <label>OTP<input value={forgotOtp} onChange={(e) => setForgotOtp(e.target.value)} placeholder="Enter code" /></label>
+            <label>New password<input type="password" value={forgotNewPassword} onChange={(e) => setForgotNewPassword(e.target.value)} placeholder="New password" /></label>
+            {forgotError && <div className="form-error">{forgotError}</div>}
+            <div style={{display:'flex',gap:8}}>
+              <button className="primary" type="submit" disabled={forgotLoading}>{forgotLoading ? 'Processing…' : 'Reset password'}</button>
+              <button type="button" className="switch-auth" onClick={() => { setForgotPasswordOpen(false); setLoginOpen(true); }}>Back to sign in</button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
 
-function Overview({ setActive, students, user, token, school, openStudentForm }) {
+function Overview({ setActive, students, user, token, school, openStudentForm, onViewDetails }) {
   if (user?.role === 'SUPER_ADMIN') return <PlatformOverview token={token} />;
   if (user?.role === 'PARENT') return <ParentLanding token={token} user={user} />;
 
@@ -676,7 +739,7 @@ function Overview({ setActive, students, user, token, school, openStudentForm })
           <div><h3>Recently added students</h3><p>Latest admissions to your school</p></div>
           <button onClick={() => setActive('students')}>View all students →</button>
         </div>
-        <StudentTable students={students.slice(0, 4)} />
+        <StudentTable students={students.slice(0, 4)} onViewDetails={onViewDetails} />
       </section>
     </>
   );
@@ -685,6 +748,10 @@ function Overview({ setActive, students, user, token, school, openStudentForm })
 function ParentLanding({ token, user }) {
   return (
     <section className="workspace">
+      <div className="coming-soon" style={{padding:12,background:'#f0f8ff',border:'1px solid #cfe4ff',borderRadius:8,marginBottom:12}}>
+        <strong>Parent portal — Coming soon</strong>
+        <div style={{fontSize:13,color:'#475569'}}>We are preparing a dedicated parent interface where you can view your child's attendance, reports, and messages.</div>
+      </div>
       <div className="workspace-title">
         <div>
           <p className="eyebrow">PARENT PORTAL</p>
@@ -699,6 +766,21 @@ function ParentLanding({ token, user }) {
           <article className="mini-card"><b>Results</b><small>School assessment summaries</small></article>
           <article className="mini-card"><b>Fees</b><small>Outstanding balances and invoices</small></article>
         </div>
+      </div>
+    </section>
+  );
+}
+
+function StudentLanding() {
+  return (
+    <section className="workspace">
+      <div className="coming-soon" style={{padding:12,background:'#fff7ed',border:'1px solid #ffedd5',borderRadius:8,marginBottom:12}}>
+        <strong>Student portal — Coming soon</strong>
+        <div style={{fontSize:13,color:'#92400e'}}>A student-focused dashboard will appear here soon to view assignments, attendance and results.</div>
+      </div>
+      <div className="panel records">
+        <div className="panel-heading"><div><h3>Student dashboard (preview)</h3><p>Basic access coming soon</p></div></div>
+        <p style={{padding:12}}>This page will provide students with access to their schedules, grades, and messages.</p>
       </div>
     </section>
   );
@@ -803,10 +885,12 @@ function Event({ date, month, title, time, color }) {
   return <div className="event"><div className={`date ${color}`}><b>{date}</b><small>{month}</small></div><div><b>{title}</b><small>{time}</small></div><button>•••</button></div>;
 }
 
-function Workspace({ active, directoryStudents, students, search, setSearch, openStudentForm, token, user, school, setNotice }) {
+function Workspace({ active, directoryStudents, students, search, setSearch, openStudentForm, token, user, school, selectedStudentId, setSelectedStudentId, setNotice, onViewDetails }) {
   if (active === 'help') return <SupportCenter token={token} user={user} school={school} />;
-  if (active === 'overview') return <Overview setActive={() => {}} students={directoryStudents} user={user} token={token} openStudentForm={openStudentForm} />;
-  if (active === 'attendance') return <AttendanceWorkspace token={token} user={user} students={students} setNotice={setNotice} />;
+  if (active === 'overview') return <Overview setActive={() => {}} students={directoryStudents} user={user} token={token} openStudentForm={openStudentForm} onViewDetails={onViewDetails} />;
+  if (active === 'attendance') return <AttendanceWorkspace token={token} user={user} school={school} students={students} setNotice={setNotice} />;
+  if (active === 'calendar') return <CalendarWorkspace token={token} user={user} school={school} students={students} setNotice={setNotice} />;
+  if (active === 'student-detail') return <StudentDetailWorkspace token={token} user={user} school={school} student={students.find((student) => getStudentId(student) === selectedStudentId)} onClose={() => { setSelectedStudentId(''); setActive('students'); }} />;
   if (active === 'academics') return <AcademicsWorkspace token={token} user={user} setNotice={setNotice} />;
   if (active === 'finance') return <FinanceWorkspace token={token} user={user} students={students} setNotice={setNotice} />;
   if (active === 'messages') return <MessagesWorkspace token={token} user={user} setNotice={setNotice} />;
@@ -815,7 +899,6 @@ function Workspace({ active, directoryStudents, students, search, setSearch, ope
   if (active === 'settings') return <SettingsWorkspace token={token} user={user} school={school} setNotice={setNotice} />;
 
   const filteredStudents = (directoryStudents || []).filter((student) => `${student.name} ${student.id} ${student.grade}`.toLowerCase().includes(search.toLowerCase()));
-
   return (
     <section className="workspace">
       <div className="workspace-title">
@@ -832,16 +915,17 @@ function Workspace({ active, directoryStudents, students, search, setSearch, ope
           <button>Filter ▾</button>
           <button>Export</button>
         </div>
-        <StudentTable students={filteredStudents} />
+        <StudentTable students={filteredStudents} onViewDetails={onViewDetails} />
       </div>
     </section>
   );
 }
 
-function AttendanceWorkspace({ token, user, students, setNotice }) {
+function AttendanceWorkspace({ token, user, school, students, setNotice }) {
   const [recordDate, setRecordDate] = useState(todayIso());
   const [statusMap, setStatusMap] = useState({});
   const [history, setHistory] = useState([]);
+  const [allAttendance, setAllAttendance] = useState([]);
   const [grouped, setGrouped] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -865,6 +949,13 @@ function AttendanceWorkspace({ token, user, students, setNotice }) {
         setHistory(response.data || []);
       } catch {
         setHistory([]);
+      }
+
+      try {
+        const response = await api(`/attendance${queryString({ ...schoolQuery(user), person_type: 'STUDENT' })}`, token);
+        setAllAttendance(response.data || []);
+      } catch {
+        setAllAttendance([]);
       }
 
       try {
@@ -908,6 +999,31 @@ function AttendanceWorkspace({ token, user, students, setNotice }) {
 
   const roster = (students || []).filter((student) => getStudentId(student));
 
+  const calendarSettings = parseSettings(school?.settings);
+  const academicCalendar = {
+    openTime: calendarSettings.open_time || '08:00',
+    closeTime: calendarSettings.close_time || '15:00',
+    terms: Array.isArray(calendarSettings.terms) && calendarSettings.terms.length ? calendarSettings.terms : [
+      { name: 'First Term', start: '', end: '' },
+      { name: 'Second Term', start: '', end: '' },
+      { name: 'Third Term', start: '', end: '' }
+    ],
+    holidays: Array.isArray(calendarSettings.holidays) ? calendarSettings.holidays : []
+  };
+
+  const attendanceRecords = allAttendance.filter((record) => record.person_type === 'STUDENT');
+  const computeTermMetrics = (term) => {
+    if (!term?.start || !term?.end) return { present: 0, total: 0, percentage: 0 };
+    const termRecords = attendanceRecords.filter((record) => record.record_date >= term.start && record.record_date <= term.end && record.status !== 'CANCELLED');
+    const present = termRecords.filter((record) => ['MARK', 'PRESENT', 'ATTENDED', 'P'].includes(record.status)).length;
+    const total = termRecords.length;
+    const percentage = total ? Math.round((present / total) * 10000) / 100 : 0;
+    return { present, total, percentage };
+  };
+
+  const termSummaries = academicCalendar.terms.map((term) => ({ ...term, ...computeTermMetrics(term) }));
+  const averageTermPercentage = termSummaries.length ? Math.round((termSummaries.reduce((sum, term) => sum + term.percentage, 0) / termSummaries.length) * 100) / 100 : 0;
+
   return (
     <section className="workspace">
       <div className="workspace-title">
@@ -944,15 +1060,288 @@ function AttendanceWorkspace({ token, user, students, setNotice }) {
             <button className="primary" disabled={loading}>{loading ? 'Saving…' : 'Save attendance'}</button>
           </form>
           <div className="panel records">
-            <div className="panel-heading"><div><h3>Grouped students</h3><p>Who is available for marking today</p></div></div>
+            <div className="panel-heading"><div><h3>Academic calendar</h3><p>School hours, term dates and public holidays</p></div></div>
             <div className="mini-grid">
-              {(grouped || []).slice(0, 6).map((group) => <article className="mini-card" key={group.id || group.name}><b>{group.name || 'Unassigned'}</b><small>{group.students?.length || 0} student(s)</small></article>)}
+              <article className="mini-card"><b>Open</b><small>{academicCalendar.openTime}</small></article>
+              <article className="mini-card"><b>Close</b><small>{academicCalendar.closeTime}</small></article>
+              <article className="mini-card"><b>Term average</b><small>{averageTermPercentage}%</small></article>
+              <article className="mini-card"><b>Holiday count</b><small>{academicCalendar.holidays.length}</small></article>
             </div>
+            <div className="panel-heading" style={{ marginTop: 18 }}><div><h3>Term summaries</h3><p>Attendance average for each term</p></div></div>
+            <div className="mini-grid">
+              {termSummaries.map((term) => (
+                <article key={term.name} className="mini-card">
+                  <b>{term.name}</b>
+                  <small>{term.start || 'TBD'} — {term.end || 'TBD'}</small>
+                  <small>{term.percentage}% attendance</small>
+                </article>
+              ))}
+            </div>
+            <div className="panel-heading" style={{ marginTop: 18 }}><div><h3>Public holidays</h3><p>Days the school is closed</p></div></div>
+            {academicCalendar.holidays.length ? (
+              <div className="student-table"><div className="table-head"><span>DATE</span><span>HOLIDAY</span><span></span><span></span></div>{academicCalendar.holidays.map((holiday) => (
+                <div className="table-row" key={`${holiday.date}-${holiday.label}`}><span>{holiday.date}</span><span>{holiday.label || 'Holiday'}</span><span></span><span></span></div>
+              ))}</div>
+            ) : <div className="empty-state"><div>⌛</div><h3>No holidays set</h3><p>Add holiday dates in School settings to see them here.</p></div>}
             <div className="panel-heading" style={{ marginTop: 18 }}><div><h3>Attendance history</h3><p>{recordDate}</p></div></div>
             {history.length ? <div className="student-table"><div className="table-head"><span>STUDENT</span><span>STATUS</span><span>DATE</span><span></span><span></span></div>{history.map((entry) => <div className="table-row" key={entry.id}><span className="student-name"><b>{entry.person_id}<small>{entry.person_type}</small></b></span><span>{entry.status}</span><span>{entry.record_date}</span><span></span><span></span></div>)}</div> : <div className="empty-state"><div>✓</div><h3>No attendance recorded</h3><p>Submit the first attendance entry for this date.</p></div>}
           </div>
         </div>
       )}
+    </section>
+  );
+}
+
+function CalendarWorkspace({ token, user, school, students, setNotice }) {
+  const [attendanceMap, setAttendanceMap] = useState({});
+  const [savingStudentId, setSavingStudentId] = useState(null);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const hasSchoolContext = user?.role !== 'SUPER_ADMIN' || !!user?.school_id;
+
+  useEffect(() => {
+    const map = {};
+    (students || []).forEach((student) => {
+      const record = student.term_attendance || student.termAttendance || {};
+      const parsed = typeof record === 'string' ? parseSettings(record) : (record || {});
+      map[student.id] = {
+        first_term: parsed.first_term || parsed.firstTerm || '',
+        second_term: parsed.second_term || parsed.secondTerm || '',
+        third_term: parsed.third_term || parsed.thirdTerm || ''
+      };
+    });
+    setAttendanceMap(map);
+  }, [students]);
+
+  const calendar = parseSettings(school?.settings);
+  const academicCalendar = {
+    openTime: calendar.open_time || '08:00',
+    closeTime: calendar.close_time || '15:00',
+    terms: Array.isArray(calendar.terms) && calendar.terms.length ? calendar.terms : [
+      { name: 'First Term', start: '', end: '' },
+      { name: 'Second Term', start: '', end: '' },
+      { name: 'Third Term', start: '', end: '' }
+    ],
+    holidays: Array.isArray(calendar.holidays) ? calendar.holidays : []
+  };
+
+  const saveTermAttendance = async (studentId) => {
+    if (!studentId || !attendanceMap[studentId]) return;
+    setError('');
+    setSuccess('');
+    setSavingStudentId(studentId);
+    try {
+      await api(`/students/${studentId}`, token, {
+        method: 'PUT',
+        body: JSON.stringify({ term_attendance: attendanceMap[studentId] })
+      });
+      setSuccess('Term attendance summary updated.');
+      setNotice('Student term attendance saved.');
+    } catch (err) {
+      setError(err.message || 'Unable to save term attendance summary');
+    } finally {
+      setSavingStudentId(null);
+    }
+  };
+
+  return (
+    <section className="workspace">
+      <div className="workspace-title">
+        <div><p className="eyebrow">SCHOOL MANAGEMENT</p><h2>Calendar</h2><p>Academic term dates, school hours, holidays, and student attendance summaries.</p></div>
+      </div>
+      {!hasSchoolContext ? <div className="empty-state"><div>✓</div><h3>Select a school context</h3><p>The calendar is available once you are working inside a school.</p></div> : (
+        <div className="workspace-grid two-up">
+          <div className="panel ticket-form">
+            <h3>Academic calendar</h3>
+            <div className="mini-grid">
+              <article className="mini-card"><b>Open</b><small>{academicCalendar.openTime}</small></article>
+              <article className="mini-card"><b>Close</b><small>{academicCalendar.closeTime}</small></article>
+              <article className="mini-card"><b>Term count</b><small>{academicCalendar.terms.length}</small></article>
+              <article className="mini-card"><b>Holiday count</b><small>{academicCalendar.holidays.length}</small></article>
+            </div>
+            <div className="panel-heading" style={{ marginTop: 18 }}><div><h3>Term dates</h3><p>Session terms for the current academic year.</p></div></div>
+            <div className="mini-grid">
+              {academicCalendar.terms.map((term) => (
+                <article key={term.name} className="mini-card">
+                  <b>{term.name}</b>
+                  <small>{term.start || 'TBD'} — {term.end || 'TBD'}</small>
+                </article>
+              ))}
+            </div>
+            <div className="panel-heading" style={{ marginTop: 18 }}><div><h3>Public holidays</h3><p>Days the school is closed.</p></div></div>
+            {academicCalendar.holidays.length ? (
+              <div className="student-table"><div className="table-head"><span>DATE</span><span>HOLIDAY</span><span></span><span></span></div>{academicCalendar.holidays.map((holiday) => (
+                <div className="table-row" key={`${holiday.date}-${holiday.label}`}><span>{holiday.date}</span><span>{holiday.label || 'Holiday'}</span><span></span><span></span></div>
+              ))}</div>
+            ) : <div className="empty-state"><div>⌛</div><h3>No public holidays set</h3><p>Set holidays in School settings to populate this calendar.</p></div>}
+          </div>
+
+          <div className="panel records">
+            <div className="panel-heading"><div><h3>Student attendance summary</h3><p>Edit term attendance percentages per student.</p></div></div>
+            {error && <div className="form-error">{error}</div>}
+            {success && <div className="notice">{success}</div>}
+            <div className="student-table">
+              <div className="table-head"><span>STUDENT</span><span>CLASS</span><span>1st term</span><span>2nd term</span><span>3rd term</span><span></span></div>
+              {(students || []).map((student) => {
+                const values = attendanceMap[student.id] || { first_term: '', second_term: '', third_term: '' };
+                return (
+                  <div className="table-row" key={student.id}>
+                    <span className="student-name"><b>{getStudentName(student)}<small>{getStudentId(student)}</small></b></span>
+                    <span>{getStudentClass(student)}</span>
+                    <span><input type="number" min="0" max="100" value={values.first_term} onChange={(e) => setAttendanceMap((current) => ({ ...current, [student.id]: { ...current[student.id], first_term: e.target.value } }))} /></span>
+                    <span><input type="number" min="0" max="100" value={values.second_term} onChange={(e) => setAttendanceMap((current) => ({ ...current, [student.id]: { ...current[student.id], second_term: e.target.value } }))} /></span>
+                    <span><input type="number" min="0" max="100" value={values.third_term} onChange={(e) => setAttendanceMap((current) => ({ ...current, [student.id]: { ...current[student.id], third_term: e.target.value } }))} /></span>
+                    <button type="button" className="secondary" disabled={savingStudentId === student.id} onClick={() => saveTermAttendance(student.id)}>{savingStudentId === student.id ? 'Saving…' : 'Save'}</button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function StudentDetailWorkspace({ token, user, school, student, onClose }) {
+  const [examResults, setExamResults] = useState([]);
+  const [examGpa, setExamGpa] = useState(null);
+  const [studentPosition, setStudentPosition] = useState(null);
+  const [examLoading, setExamLoading] = useState(false);
+  const [examError, setExamError] = useState('');
+  const record = student?.term_attendance || student?.termAttendance || {};
+  const termValues = {
+    first_term: record.first_term ?? record.firstTerm ?? '',
+    second_term: record.second_term ?? record.secondTerm ?? '',
+    third_term: record.third_term ?? record.thirdTerm ?? ''
+  };
+
+  useEffect(() => {
+    const loadExamData = async () => {
+      if (!token || !student?.id) return;
+      setExamLoading(true);
+      setExamError('');
+      try {
+        const examResponse = await api(`/exams/student/${student.id}`, token);
+        setExamResults(examResponse.data?.results || []);
+        setExamGpa(examResponse.data?.gpa ?? null);
+
+        if (student.class_id) {
+          const rankingResponse = await api(`/exams/class/${student.class_id}/rankings`, token);
+          const entry = (rankingResponse.data || []).find((item) => item.student?.id === student.id || item.student_id === student.id);
+          setStudentPosition(entry?.position ?? null);
+        } else {
+          setStudentPosition(null);
+        }
+      } catch (err) {
+        setExamError(err.message || 'Unable to load exam data');
+        setExamResults([]);
+        setExamGpa(null);
+        setStudentPosition(null);
+      } finally {
+        setExamLoading(false);
+      }
+    };
+
+    loadExamData();
+  }, [token, student?.id, student?.class_id]);
+
+  const percentages = ['first_term', 'second_term', 'third_term']
+    .map((key) => {
+      const value = Number(termValues[key]);
+      return Number.isFinite(value) ? value : null;
+    })
+    .filter((value) => value !== null);
+
+  const average = percentages.length ? Math.round((percentages.reduce((sum, value) => sum + value, 0) / percentages.length) * 100) / 100 : null;
+  const passedTerms = percentages.filter((value) => value >= 50).length;
+  const recommendation = !percentages.length
+    ? 'No term attendance percentages recorded yet. Enter scores in the student attendance editor to generate a recommendation.'
+    : average >= 70 && passedTerms === percentages.length
+      ? 'Strong promotion recommendation.'
+      : average >= 60 && passedTerms >= 2
+        ? 'Likely to promote with support.'
+        : average >= 50
+          ? 'Monitor progress closely; promotion may be possible with additional support.'
+          : 'At risk of repeating the current class unless there is considerable improvement.';
+
+  return (
+    <section className="workspace">
+      <div className="workspace-title">
+        <div>
+          <p className="eyebrow">STUDENT PROFILE</p>
+          <h2>{getStudentName(student)}</h2>
+          <p>Review the student profile, stored term averages, and promotion recommendation.</p>
+        </div>
+        <button className="secondary" type="button" onClick={onClose}>Back to students</button>
+      </div>
+      <div className="workspace-grid two-up">
+        <div className="panel">
+          <h3>Student details</h3>
+          <div className="detail-grid">
+            <div><strong>Student ID</strong><span>{getStudentId(student)}</span></div>
+            <div><strong>Unique reference</strong><span>{student.unique_id || student.student_code || student.id}</span></div>
+            <div><strong>Class</strong><span>{getStudentClass(student)}</span></div>
+            <div><strong>Guardian</strong><span>{getStudentGuardian(student)}</span></div>
+            <div><strong>Guardian contact</strong><span>{getStudentGuardianContact(student)}</span></div>
+            <div><strong>Parent email</strong><span>{student.parent_email || student.parentEmail || 'Not provided'}</span></div>
+            <div><strong>Passport / ID</strong><span>{student.passport_number || student.passport || student.passport_url || 'Not provided'}</span></div>
+            <div><strong>Date of birth</strong><span>{student.date_of_birth || student.dob || 'Unknown'}</span></div>
+            <div><strong>Admission date</strong><span>{student.admission_date || student.admissionDate || 'Unknown'}</span></div>
+            <div style={{ gridColumn: '1 / -1' }}><strong>Address</strong><span>{student.address || 'Unspecified'}</span></div>
+          </div>
+        </div>
+        <div className="panel">
+          <h3>Promotion recommendation</h3>
+          <div className="panel-body">
+            <p>{recommendation}</p>
+            {average !== null && (
+              <p><small>Average term percentage: <strong>{average}%</strong></small></p>
+            )}
+          </div>
+          <div className="student-table">
+            <div className="table-head"><span>TERM</span><span>PERCENTAGE</span><span>STATUS</span></div>
+            {['First term', 'Second term', 'Third term'].map((label, index) => {
+              const key = ['first_term', 'second_term', 'third_term'][index];
+              const value = termValues[key];
+              const numeric = Number(value);
+              const status = value === '' ? 'Not recorded' : (numeric >= 50 ? 'Good' : 'Needs review');
+              return (
+                <div className="table-row" key={key}>
+                  <span>{label}</span>
+                  <span>{value !== '' ? `${value}%` : '—'}</span>
+                  <span>{status}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <div className="panel">
+          <h3>Exam performance</h3>
+          {examLoading ? <p>Loading exam scores…</p> : examError ? <div className="form-error">{examError}</div> : (
+            <>
+              <div className="detail-grid">
+                <div><strong>Exam GPA</strong><span>{examGpa !== null ? examGpa : 'Not available'}</span></div>
+                <div><strong>Class position</strong><span>{studentPosition ? `#${studentPosition}` : 'Not available'}</span></div>
+                <div style={{ gridColumn: '1 / -1' }}><strong>Recorded exams</strong><span>{examResults.length ? `${examResults.length} records` : 'No exam scores yet'}</span></div>
+              </div>
+              {examResults.length ? (
+                <div className="student-table">
+                  <div className="table-head"><span>EXAM</span><span>SCORE</span><span>GRADE</span><span>REMARKS</span></div>
+                  {examResults.map((result) => (
+                    <div className="table-row" key={result.id}>
+                      <span className="student-name"><b>{result.exam_title || result.title || result.exam_id}<small>{result.exam_term ? `${result.exam_term} · ${result.exam_session || result.session || ''}` : ''}</small></b></span>
+                      <span>{result.score}</span>
+                      <span>{result.grade}</span>
+                      <span>{result.remarks || 'None'}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : <div className="empty-state"><div>✎</div><h3>No exam results</h3><p>This student has no recorded exam scores yet.</p></div>}
+            </>
+          )}
+        </div>
+      </div>
     </section>
   );
 }
@@ -987,7 +1376,7 @@ function StaffWorkspace({ token, user, setNotice }) {
   }, [token, user?.school_id]);
 
   const openAddStaff = () => {
-    setStaffForm({ full_name: '', email: '', phone: '', department: '', subjects: '', hired_date: '', status: 'ACTIVE' });
+    setStaffForm({ full_name: '', email: '', phone: '', department: '', subjects: '', hired_date: '', status: 'ACTIVE', assigned_class: '' });
     setStaffError('');
     setEditingStaff(null);
     setAddStaffModal(true);
@@ -1228,7 +1617,7 @@ function ParentPortalWorkspace({ token, user, students, setNotice }) {
                 <div className="table-head"><span>EXAM</span><span>SCORE</span><span>GRADE</span><span></span><span></span></div>
                 {results.results.map((result) => (
                   <div className="table-row" key={result.id}>
-                    <span className="student-name"><b>{result.exam_id || 'Assessment'}</b></span>
+                    <span className="student-name"><b>{result.exam_title || result.title || result.exam_id || 'Assessment'}</b></span>
                     <span>{result.score}</span>
                     <span>{result.grade}</span>
                     <span></span>
@@ -1275,6 +1664,12 @@ function AcademicsWorkspace({ token, user, setNotice }) {
   const [classForm, setClassForm] = useState({ name: '', arm: '', department: '', teacherId: '', description: '' });
   const [teacherForm, setTeacherForm] = useState({ full_name: '', email: '', phone: '', department: '', subjects: '', salary: '', status: 'ACTIVE', hired_date: '' });
   const [examForm, setExamForm] = useState({ title: '', term: 'First Term', session: '', examType: 'CA', classId: '', subjectId: '' });
+  const [selectedExam, setSelectedExam] = useState(null);
+  const [selectedExamStudents, setSelectedExamStudents] = useState([]);
+  const [examScores, setExamScores] = useState({});
+  const [examEntryLoading, setExamEntryLoading] = useState(false);
+  const [examEntryError, setExamEntryError] = useState('');
+  const [examEntryMessage, setExamEntryMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const hasSchoolContext = user?.role !== 'SUPER_ADMIN' || !!user?.school_id;
@@ -1364,6 +1759,73 @@ function AcademicsWorkspace({ token, user, setNotice }) {
       setNotice(err.message || 'Unable to load class details');
     } finally {
       setLoadingClassDetail(false);
+    }
+  };
+
+  const openExamScores = async (exam) => {
+    if (!exam || !exam.id) return;
+    setSelectedExam(exam);
+    setSelectedExamStudents([]);
+    setExamScores({});
+    setExamEntryError('');
+    setExamEntryMessage('');
+    try {
+      let studentsResp;
+      if (exam.class_id) {
+        studentsResp = await api('/students/filter', token, { method: 'POST', body: JSON.stringify({ class_id: exam.class_id, school_id: user?.school_id }) });
+      } else {
+        studentsResp = await api(`/students${queryString(schoolQuery(user))}`, token);
+      }
+      const students = studentsResp.data || [];
+      setSelectedExamStudents(students);
+
+      const existingResults = await api(`/exams/${exam.id}/results`, token);
+      const scoreMap = {};
+      (existingResults.data || []).forEach((result) => {
+        scoreMap[result.student_id] = { score: result.score ?? '', remarks: result.remarks || '' };
+      });
+      setExamScores(scoreMap);
+    } catch (err) {
+      setExamEntryError(err.message || 'Unable to load exam score editor');
+    }
+  };
+
+  const saveExamScores = async (event) => {
+    event && event.preventDefault();
+    if (!selectedExam) return;
+    setExamEntryError('');
+    setExamEntryMessage('');
+    setExamEntryLoading(true);
+
+    const results = selectedExamStudents
+      .map((student) => {
+        const entry = examScores[student.id] || {};
+        if (entry.score === '' || entry.score === undefined || entry.score === null) return null;
+        return {
+          studentId: student.id,
+          score: Number(entry.score),
+          remarks: entry.remarks || ''
+        };
+      })
+      .filter(Boolean);
+
+    if (!results.length) {
+      setExamEntryError('Enter at least one score before saving.');
+      setExamEntryLoading(false);
+      return;
+    }
+
+    try {
+      await api(`/exams/${selectedExam.id}/results`, token, {
+        method: 'POST',
+        body: JSON.stringify({ results })
+      });
+      setExamEntryMessage('Exam scores saved successfully.');
+      await loadAcademics();
+    } catch (err) {
+      setExamEntryError(err.message || 'Failed to save exam scores');
+    } finally {
+      setExamEntryLoading(false);
     }
   };
 
@@ -1542,7 +2004,7 @@ function AcademicsWorkspace({ token, user, setNotice }) {
               </form>
               <div className="panel records">
                 <div className="panel-heading"><div><h3>Recent exams</h3><p>Created assessments</p></div></div>
-                {exams.length ? <div className="student-table"><div className="table-head"><span>TITLE</span><span>TERM</span><span>TYPE</span><span>CLASS</span><span></span></div>{exams.map((exam) => <div className="table-row" key={exam.id}><span className="student-name"><b>{exam.title}<small>{exam.session}</small></b></span><span>{exam.term}</span><span>{exam.exam_type}</span><span>{exam.class_id || 'All classes'}</span><span></span></div>)}</div> : <div className="empty-state"><div>▣</div><h3>No exams yet</h3><p>Create an exam to start entering results.</p></div>}
+                {exams.length ? <div className="student-table"><div className="table-head"><span>TITLE</span><span>TERM</span><span>TYPE</span><span>CLASS</span><span></span></div>{exams.map((exam) => <div className="table-row" key={exam.id}><span className="student-name"><b>{exam.title}<small>{exam.session}</small></b></span><span>{exam.term}</span><span>{exam.exam_type}</span><span>{classes.find((c) => c.id === exam.class_id)?.name || exam.class_id || 'All classes'}</span><span><button type="button" className="secondary" onClick={() => openExamScores(exam)}>Enter scores</button></span></div>)}</div> : <div className="empty-state"><div>▣</div><h3>No exams yet</h3><p>Create an exam to start entering results.</p></div>}
               </div>
             </div>
           )}
@@ -1577,6 +2039,38 @@ function AcademicsWorkspace({ token, user, setNotice }) {
                   <article className="mini-card"><b>GPA bands</b><small>{report?.gpaByLevel?.length || 0} groups</small></article>
                 </div>
               </div>
+            </div>
+          )}
+
+          {selectedExam && (
+            <div className="modal-layer">
+              <form className="panel" style={{ width: 820, maxWidth: '100%' }} onSubmit={saveExamScores}>
+                <button type="button" className="close" onClick={() => setSelectedExam(null)}>×</button>
+                <div className="panel-heading"><div><h3>Enter scores for {selectedExam.title}</h3><p>{selectedExam.session} • {selectedExam.term} • {classes.find((c) => c.id === selectedExam.class_id)?.name || 'All classes'}</p></div></div>
+                {examEntryError && <div className="form-error">{examEntryError}</div>}
+                {examEntryMessage && <div className="notice">{examEntryMessage}</div>}
+                <div style={{ marginBottom: 16 }}>
+                  <strong>Students in scope</strong>
+                  <p>{selectedExamStudents.length} students will receive score records for this exam.</p>
+                </div>
+                <div className="student-table">
+                  <div className="table-head"><span>STUDENT</span><span>SCORE</span><span>REMARKS</span></div>
+                  {selectedExamStudents.length ? selectedExamStudents.map((student) => {
+                    const current = examScores[student.id] || { score: '', remarks: '' };
+                    return (
+                      <div className="table-row" key={student.id}>
+                        <span className="student-name"><b>{getStudentName(student)}<small>{student.student_code || student.id}</small></b></span>
+                        <span><input type="number" min="0" max="100" value={current.score} onChange={(e) => setExamScores({ ...examScores, [student.id]: { ...current, score: e.target.value } })} placeholder="Score" style={{ width: 90 }} /></span>
+                        <span><input value={current.remarks} onChange={(e) => setExamScores({ ...examScores, [student.id]: { ...current, remarks: e.target.value } })} placeholder="Optional remarks" /></span>
+                      </div>
+                    );
+                  }) : <div className="empty-state"><div>▣</div><h3>No students found</h3><p>Ensure a class is assigned to this exam before entering scores.</p></div>}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
+                  <button type="button" className="secondary" onClick={() => setSelectedExam(null)}>Close</button>
+                  <button className="primary" type="submit" disabled={examEntryLoading}>{examEntryLoading ? 'Saving…' : 'Save scores'}</button>
+                </div>
+              </form>
             </div>
           )}
         </>
@@ -1807,10 +2301,21 @@ function MessagesWorkspace({ token, user, setNotice }) {
 
 function SettingsWorkspace({ token, user, school, setNotice }) {
   const [form, setForm] = useState({});
+  const [calendar, setCalendar] = useState({
+    open_time: '08:00',
+    close_time: '15:00',
+    terms: [
+      { name: 'First Term', start: '', end: '' },
+      { name: 'Second Term', start: '', end: '' },
+      { name: 'Third Term', start: '', end: '' }
+    ],
+    holidays: []
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
+    const settings = parseSettings(school?.settings);
     setForm({
       name: school?.name || '',
       code: school?.code || '',
@@ -1826,6 +2331,16 @@ function SettingsWorkspace({ token, user, school, setNotice }) {
       primary_color: school?.primary_color || '#2563EB',
       secondary_color: school?.secondary_color || '#1E40AF'
     });
+    setCalendar({
+      open_time: settings.open_time || '08:00',
+      close_time: settings.close_time || '15:00',
+      terms: Array.isArray(settings.terms) && settings.terms.length ? settings.terms : [
+        { name: 'First Term', start: '', end: '' },
+        { name: 'Second Term', start: '', end: '' },
+        { name: 'Third Term', start: '', end: '' }
+      ],
+      holidays: Array.isArray(settings.holidays) ? settings.holidays : []
+    });
   }, [school]);
 
   const saveSchool = async (event) => {
@@ -1834,7 +2349,7 @@ function SettingsWorkspace({ token, user, school, setNotice }) {
     setSaving(true);
     setError('');
     try {
-      const resp = await api(`/schools/${school.id}`, token, { method: 'PUT', body: JSON.stringify(form) });
+      const resp = await api(`/schools/${school.id}`, token, { method: 'PUT', body: JSON.stringify({ ...form, settings: calendar }) });
       setNotice('School settings updated.');
       if (resp && resp.data) setSchool(resp.data);
     } catch (err) {
@@ -1906,6 +2421,32 @@ function SettingsWorkspace({ token, user, school, setNotice }) {
             </div>
             <label>Website<input value={form.website || ''} onChange={(e) => setForm({ ...form, website: e.target.value })} disabled={user?.role !== 'SUPER_ADMIN'} /></label>
             <label>Logo URL<input value={form.logo_url || ''} onChange={(e) => setForm({ ...form, logo_url: e.target.value })} disabled={user?.role !== 'SUPER_ADMIN'} /></label>
+            <div className="calendar-settings" style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid rgba(0,0,0,.08)' }}>
+              <h3>Academic calendar</h3>
+              <div className="ticket-fields">
+                <label>School opens<input type="time" value={calendar.open_time} onChange={(e) => setCalendar((current) => ({ ...current, open_time: e.target.value }))} disabled={user?.role !== 'SUPER_ADMIN'} /></label>
+                <label>School closes<input type="time" value={calendar.close_time} onChange={(e) => setCalendar((current) => ({ ...current, close_time: e.target.value }))} disabled={user?.role !== 'SUPER_ADMIN'} /></label>
+              </div>
+              <div className="term-rows">
+                {calendar.terms.map((term, termIndex) => (
+                  <div key={`term-${termIndex}`} className="ticket-fields" style={{ gap: 12 }}>
+                    <label style={{ flex: 1 }}><small>{term.name}</small><input type="date" value={term.start || ''} onChange={(e) => setCalendar((current) => ({ ...current, terms: current.terms.map((item, index) => index === termIndex ? { ...item, start: e.target.value } : item) }) )} disabled={user?.role !== 'SUPER_ADMIN'} /></label>
+                    <label style={{ flex: 1 }}><small>&nbsp;</small><input type="date" value={term.end || ''} onChange={(e) => setCalendar((current) => ({ ...current, terms: current.terms.map((item, index) => index === termIndex ? { ...item, end: e.target.value } : item) }) )} disabled={user?.role !== 'SUPER_ADMIN'} /></label>
+                  </div>
+                ))}
+              </div>
+              <div className="holiday-list" style={{ marginTop: 16 }}>
+                <h4>Public holidays</h4>
+                {calendar.holidays.length ? calendar.holidays.map((holiday, index) => (
+                  <div key={`holiday-${index}`} className="ticket-fields" style={{ gap: 12, alignItems: 'flex-end' }}>
+                    <label style={{ flex: 1 }}><input type="date" value={holiday.date || ''} onChange={(e) => setCalendar((current) => ({ ...current, holidays: current.holidays.map((item, idx) => idx === index ? { ...item, date: e.target.value } : item) }) )} disabled={user?.role !== 'SUPER_ADMIN'} /></label>
+                    <label style={{ flex: 2 }}><input value={holiday.label || ''} placeholder="Holiday name" onChange={(e) => setCalendar((current) => ({ ...current, holidays: current.holidays.map((item, idx) => idx === index ? { ...item, label: e.target.value } : item) }) )} disabled={user?.role !== 'SUPER_ADMIN'} /></label>
+                    <button type="button" className="secondary" style={{ height: 34 }} onClick={() => setCalendar((current) => ({ ...current, holidays: current.holidays.filter((_, idx) => idx !== index) }))} disabled={user?.role !== 'SUPER_ADMIN'}>Remove</button>
+                  </div>
+                )) : <p style={{ color: '#475569', marginTop: 8 }}>No public holidays defined yet.</p>}
+                <button type="button" className="secondary" style={{ marginTop: 12 }} onClick={() => setCalendar((current) => ({ ...current, holidays: [...current.holidays, { date: '', label: '' }] }))} disabled={user?.role !== 'SUPER_ADMIN'}>Add holiday</button>
+              </div>
+            </div>
             <div style={{display:'flex',gap:12,alignItems:'center'}}>
               <input type="file" accept="image/*" onChange={(e) => uploadLogo(e.target.files && e.target.files[0])} disabled={user?.role !== 'SUPER_ADMIN' || uploadingLogo} />
               {uploadingLogo && <small>Uploading…</small>}
@@ -1972,17 +2513,17 @@ function SupportCenter({ token, user, school }) {
   );
 }
 
-function StudentTable({ students }) {
+function StudentTable({ students, onViewDetails }) {
   return (
     <div className="student-table">
       <div className="table-head"><span>STUDENT</span><span>CLASS</span><span>GUARDIAN</span><span>STATUS</span><span></span></div>
       {(students || []).length ? students.map((student) => (
-        <div className="table-row" key={student.id}>
-          <span className="student-name"><i className={`student-avatar ${student.color}`}>{student.initials}</i><b>{student.name}<small>{student.id}</small></b></span>
-          <span>{student.grade}</span>
-          <span>{student.guardian}</span>
-          <span><em className={(student.status || 'active').toLowerCase().replace(' ', '-')}>{student.status}</em></span>
-          <button>•••</button>
+        <div className="table-row" key={getStudentId(student)}>
+          <span className="student-name"><i className={`student-avatar ${student.color || ''}`}>{student.initials || (getStudentName(student)[0] || 'S')}</i><b>{getStudentName(student)}<small>{getStudentId(student)}</small></b></span>
+          <span>{getStudentClass(student)}</span>
+          <span>{getStudentGuardian(student)}</span>
+          <span><em className={(student.status || 'active').toLowerCase().replace(' ', '-')}>{student.status || 'Active'}</em></span>
+          <button type="button" className="secondary" onClick={() => onViewDetails?.(student)}>View</button>
         </div>
       )) : (
         <div className="empty-state">

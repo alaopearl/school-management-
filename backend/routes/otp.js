@@ -19,29 +19,41 @@ const storeOTP = (email, otp) => {
 };
 
 const sendEmailOTP = async (email, otp) => {
-    // If SMTP settings are configured, use Nodemailer to send the OTP
     const SMTP_HOST = process.env.SMTP_HOST;
     const SMTP_PORT = process.env.SMTP_PORT;
-    const SMTP_USER = process.env.SMTP_USER;
-    const SMTP_PASS = process.env.SMTP_PASS;
+    const SMTP_USER = process.env.SMTP_USER || process.env.EMAIL_USER;
+    const SMTP_PASS = process.env.SMTP_PASS || process.env.EMAIL_PASSWORD;
+    const SMTP_FROM = process.env.SMTP_FROM || process.env.EMAIL_FROM || SMTP_USER;
 
-    if (!SMTP_HOST || !SMTP_PORT || !SMTP_USER || !SMTP_PASS) {
-        return false; // SMTP not configured
+    if (!SMTP_USER || !SMTP_PASS) {
+        return false; // Email sender not configured
     }
 
     const nodemailer = require('nodemailer');
-    const transporter = nodemailer.createTransport({
-        host: SMTP_HOST,
-        port: parseInt(SMTP_PORT, 10),
-        secure: SMTP_PORT == 465, // true for 465, false for others
-        auth: {
-            user: SMTP_USER,
-            pass: SMTP_PASS
-        }
-    });
+    let transporter;
+
+    if (SMTP_HOST && SMTP_PORT) {
+        transporter = nodemailer.createTransport({
+            host: SMTP_HOST,
+            port: parseInt(SMTP_PORT, 10),
+            secure: String(SMTP_PORT) === '465',
+            auth: {
+                user: SMTP_USER,
+                pass: SMTP_PASS
+            }
+        });
+    } else {
+        transporter = nodemailer.createTransport({
+            service: 'gmail',
+            auth: {
+                user: SMTP_USER,
+                pass: SMTP_PASS
+            }
+        });
+    }
 
     const mailOptions = {
-        from: process.env.SMTP_FROM || SMTP_USER,
+        from: SMTP_FROM || SMTP_USER,
         to: email,
         subject: 'Your verification code',
         text: `Your verification code is: ${otp}`,

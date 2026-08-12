@@ -15,14 +15,24 @@ const app = express();
 
 if (fs.existsSync(path.join(PUBLIC_DIR, 'index.html'))) {
     app.use(express.static(PUBLIC_DIR));
-    app.get('/', (req, res) => {
-        res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
-    });
 } else {
-    app.get('/', (req, res) => res.status(200).send('Backend running. Frontend build not present.'));
+    console.warn('Frontend build not found at', PUBLIC_DIR);
 }
 
 app.use(backendApp);
+
+app.get('*', (req, res) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/uploads') || req.path.startsWith('/receipts') || req.path.startsWith('/invoices')) {
+        return res.status(404).json({ error: 'Not found' });
+    }
+
+    const indexPath = path.join(PUBLIC_DIR, 'index.html');
+    if (fs.existsSync(indexPath)) {
+        return res.sendFile(indexPath);
+    }
+
+    res.status(200).send('Backend running. Frontend build not present.');
+});
 
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });

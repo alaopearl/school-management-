@@ -9,7 +9,7 @@
     "backend"
   ],
   "scripts": {
-    "start": "node server.js",
+    "start": "npm --workspace backend start",
     "dev": "concurrently \"npm --workspace backend run dev\" \"npm --workspace frontend run dev\"",
     "build": "npm --workspace frontend run build"
   },

@@ -2,7 +2,7 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const db = require('../database');
 const { authenticateToken, authorizeRoles } = require('../middleware/auth');
-const { sendStudentNotification } = require('../utils/email');
+const { sendStudentNotification, sendParentNotification } = require('../utils/email');
 
 const router = express.Router();
 
@@ -111,10 +111,24 @@ router.post('/', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SCHOOL_ADMIN'
             const school = await db.getSchoolById(schoolId);
             const schoolName = school?.name || 'Unknown School';
             const currentUserEmail = req.user.email;
-            
             await sendStudentNotification(schoolName, req.body, currentUserEmail);
+
+            // Also notify parents if emails are provided (supports `parent_email` or `parent_emails`)
+            try {
+                const parentEmailsRaw = req.body.parent_emails || req.body.parent_email || req.body.parentContactEmail || '';
+                let parentEmails = [];
+                if (parentEmailsRaw) {
+                    if (Array.isArray(parentEmailsRaw)) parentEmails = parentEmailsRaw;
+                    else parentEmails = String(parentEmailsRaw).split(',').map(s => s.trim()).filter(Boolean);
+                }
+                if (parentEmails.length) {
+                    await sendParentNotification(schoolName, { ...req.body, student_code: student.student_code }, parentEmails, currentUserEmail);
+                }
+            } catch (parentErr) {
+                console.error('Parent email notification failed (non-blocking):', parentErr && parentErr.message ? parentErr.message : parentErr);
+            }
         } catch (emailError) {
-            console.error('Email notification failed (non-blocking):', emailError.message);
+            console.error('Email notification failed (non-blocking):', emailError && emailError.message ? emailError.message : emailError);
             // Continue without throwing error - this is a non-critical operation
         }
 

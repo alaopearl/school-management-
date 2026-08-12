@@ -200,7 +200,7 @@ router.post('/register-school', async (req, res) => {
             primary_color: primaryColor || '#2563EB',
             secondary_color: secondaryColor || '#1E40AF',
             session_system: 'TERM',
-            status: 'PENDING_APPROVAL',
+            status: 'ACTIVE',
             subscription_plan: 'FREE',
             settings: JSON.stringify({ theme: 'light', language: 'en' })
         });
@@ -211,7 +211,7 @@ router.post('/register-school', async (req, res) => {
             principal_email: principalEmail || null,
             student_count_estimate: numberOfStudents || null,
             staff_count_estimate: numberOfStaff || null,
-            login_enabled: 0
+            login_enabled: 1
         });
 
         await db.createUser({
@@ -222,7 +222,7 @@ router.post('/register-school', async (req, res) => {
             full_name: administratorName,
             phone: principalPhone || phone || null,
             role: 'SCHOOL_ADMIN',
-            status: 'PENDING_APPROVAL'
+            status: 'ACTIVE'
         });
 
         const superAdmin = await db.getSuperAdmin();
@@ -232,8 +232,8 @@ router.post('/register-school', async (req, res) => {
                 school_id: null,
                 recipient_id: superAdmin.id,
                 recipient_type: 'USER',
-                subject: 'New school registration awaiting approval',
-                message: `${school.name} has registered and is awaiting approval.`,
+                subject: 'New school registration completed',
+                message: `${school.name} has registered and is ready to use the platform.`,
                 type: 'SCHOOL_REGISTRATION',
                 channel: 'IN_APP',
                 sent_by: null
@@ -242,8 +242,8 @@ router.post('/register-school', async (req, res) => {
 
         return res.status(201).json({
             success: true,
-            message: 'School registration submitted successfully. Your account is awaiting approval from the platform administrator.',
-            data: { ...school, status: 'PENDING_APPROVAL' }
+            message: 'School account created successfully. Your administrator can now sign in.',
+            data: school
         });
     } catch (error) {
         res.status(500).json({ error: error.message });

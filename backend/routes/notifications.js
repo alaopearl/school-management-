@@ -153,24 +153,33 @@ router.post('/:id/retry', authenticateToken, authorizeRoles('SUPER_ADMIN'), asyn
 async function sendEmailNotification(notification) {
     const SMTP_HOST = process.env.SMTP_HOST;
     const SMTP_PORT = process.env.SMTP_PORT;
-    const SMTP_USER = process.env.SMTP_USER;
-    const SMTP_PASS = process.env.SMTP_PASS;
+    const SMTP_USER = process.env.SMTP_USER || process.env.EMAIL_USER;
+    const SMTP_PASS = process.env.SMTP_PASS || process.env.EMAIL_PASSWORD;
+    const SMTP_FROM = process.env.SMTP_FROM || process.env.EMAIL_FROM || SMTP_USER;
 
-    if (!SMTP_HOST || !SMTP_PORT || !SMTP_USER || !SMTP_PASS) {
+    if (!SMTP_USER || !SMTP_PASS) {
         console.log(`[Email fallback] ${notification.message}`);
         return;
     }
 
     try {
-        const transporter = nodemailer.createTransport({
-            host: SMTP_HOST,
-            port: parseInt(SMTP_PORT, 10),
-            secure: SMTP_PORT == 465,
-            auth: { user: SMTP_USER, pass: SMTP_PASS }
-        });
+        let transporter;
+        if (SMTP_HOST && SMTP_PORT) {
+            transporter = nodemailer.createTransport({
+                host: SMTP_HOST,
+                port: parseInt(SMTP_PORT, 10),
+                secure: String(SMTP_PORT) === '465',
+                auth: { user: SMTP_USER, pass: SMTP_PASS }
+            });
+        } else {
+            transporter = nodemailer.createTransport({
+                service: 'gmail',
+                auth: { user: SMTP_USER, pass: SMTP_PASS }
+            });
+        }
 
         await transporter.sendMail({
-            from: process.env.SMTP_FROM || SMTP_USER,
+            from: SMTP_FROM,
             to: notification.recipient_email || 'student@school.com',
             subject: notification.subject,
             html: `<p>${notification.message}</p>`

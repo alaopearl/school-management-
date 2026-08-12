@@ -1,10 +1,10 @@
 services:
   - type: web
-    name: student-management-app
+    name: school-management-
     env: node
     plan: free
     branch: main
-    buildCommand: npm install && npm --workspace frontend run build && npm --workspace backend install
+    buildCommand: npm install && npm --workspace frontend run build
     startCommand: npm --workspace backend start
     envVars:
       - key: DATABASE_PATH

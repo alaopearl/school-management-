@@ -26,9 +26,9 @@ router.post('/', async (req, res) => {
 
         const SMTP_HOST = process.env.SMTP_HOST;
         const SMTP_PORT = process.env.SMTP_PORT;
-        const SMTP_USER = process.env.SMTP_USER;
-        const SMTP_PASS = process.env.SMTP_PASS;
-        const SMTP_FROM = process.env.SMTP_FROM || recipient;
+        const SMTP_USER = process.env.SMTP_USER || process.env.EMAIL_USER;
+        const SMTP_PASS = process.env.SMTP_PASS || process.env.EMAIL_PASSWORD;
+        const SMTP_FROM = process.env.SMTP_FROM || process.env.EMAIL_FROM || recipient;
 
         let transporter;
         if (SMTP_HOST && SMTP_PORT && SMTP_USER && SMTP_PASS) {
@@ -36,6 +36,14 @@ router.post('/', async (req, res) => {
                 host: SMTP_HOST,
                 port: Number(SMTP_PORT),
                 secure: Number(SMTP_PORT) === 465,
+                auth: {
+                    user: SMTP_USER,
+                    pass: SMTP_PASS
+                }
+            });
+        } else if (SMTP_USER && SMTP_PASS) {
+            transporter = nodemailer.createTransport({
+                service: 'gmail',
                 auth: {
                     user: SMTP_USER,
                     pass: SMTP_PASS

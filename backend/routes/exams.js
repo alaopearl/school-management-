@@ -42,25 +42,50 @@ router.get('/', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SCHOOL_ADMIN',
     }
 });
 
-// Post exam result
+// Get exam results
+router.get('/:examId/results', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SCHOOL_ADMIN', 'TEACHER'), async (req, res) => {
+    try {
+        const results = await db.listResultsByExam(req.params.examId);
+        res.json({ success: true, count: results.length, data: results });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Post exam result(s)
 router.post('/:examId/results', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SCHOOL_ADMIN', 'TEACHER'), async (req, res) => {
     try {
-        const { studentId, score, remarks } = req.body;
-        if (!studentId || score === undefined) {
-            return res.status(400).json({ error: 'studentId and score are required' });
+        const examId = req.params.examId;
+        const resultsPayload = Array.isArray(req.body.results) ? req.body.results : [{ studentId: req.body.studentId, score: req.body.score, remarks: req.body.remarks }];
+
+        if (!resultsPayload.length) {
+            return res.status(400).json({ error: 'No exam results provided' });
         }
 
-        const grade = calculateGrade(score);
-        const result = await db.createResult({
-            id: uuidv4(),
-            exam_id: req.params.examId,
-            student_id: studentId,
-            score,
-            grade,
-            remarks: remarks || null
-        });
+        const saved = [];
+        for (const item of resultsPayload) {
+            const { studentId, score, remarks } = item;
+            if (!studentId || score === undefined) {
+                return res.status(400).json({ error: 'Each result requires studentId and score' });
+            }
 
-        res.status(201).json({ success: true, data: result });
+            const grade = calculateGrade(score);
+            const existingResult = await db.getResultByExamAndStudent(examId, studentId);
+            if (existingResult) {
+                saved.push(await db.updateResult(existingResult.id, { score, grade, remarks: remarks || null }));
+            } else {
+                saved.push(await db.createResult({
+                    id: uuidv4(),
+                    exam_id: examId,
+                    student_id: studentId,
+                    score,
+                    grade,
+                    remarks: remarks || null
+                }));
+            }
+        }
+
+        res.status(201).json({ success: true, count: saved.length, data: saved });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }

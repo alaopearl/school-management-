@@ -56,14 +56,28 @@ body{background:var(--bg);color:#0f1724;-webkit-font-smoothing:antialiased}
 /* form focused states */
 input:focus,textarea:focus,select:focus{outline:none;box-shadow:0 6px 18px rgba(37,99,235,0.08);border-color:var(--accent)}
 
+/* Coming soon banner styling */
+.coming-soon{padding:14px;border-radius:10px;border:1px solid rgba(37,99,235,0.12);background:linear-gradient(180deg,rgba(37,99,235,0.03),rgba(37,99,235,0.01));display:flex;flex-direction:column;gap:6px}
+.coming-soon strong{color:#0b3a75;font-weight:700}
+.coming-soon div{color:#475569;font-size:13px}
+
+/* Dev role switcher (visible on localhost) */
+.dev-role{display:inline-flex;align-items:center;gap:8px;margin-left:12px}
+.dev-role select{padding:6px 8px;border-radius:8px;border:1px solid rgba(15,23,36,0.06);background:#fff}
+
+
 /* compact helpers */
 .mini-grid{display:flex;gap:12px}.mini-card{background:var(--card);padding:14px;border-radius:10px;box-shadow:var(--shadow-1);min-width:160px}
 
-/* small screens tweaks */
+/* small screens tweaks: keep sidebar as an off-canvas left panel */
 @media(max-width:700px){
   .login-card,.student-card{width:100%;padding:14px}
-  .app{grid-template-columns:1fr}
-  .sidebar{position:relative;transform:none;width:100%;height:auto}
+  .app{display:block}
+  .sidebar{position:fixed;top:0;left:0;transform:translateX(-100%);width:85vw;max-width:320px;height:100vh;z-index:60;transition:transform .3s ease-in-out;box-shadow:0 24px 55px rgba(0,0,0,.18)}
+  .app.menu-open .sidebar{transform:none}
+  .backdrop{display:block;position:fixed;inset:0;background:rgba(10,30,39,.43);z-index:50}
+  /* Ensure main content doesn't shift when menu opens */
+  main{transform:none}
 }
 
 .school-icon-img{width:44px;height:44px;border-radius:10px;object-fit:cover}

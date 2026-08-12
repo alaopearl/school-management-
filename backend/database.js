@@ -245,6 +245,7 @@ const database = {
                 address TEXT,
                 parent_name TEXT,
                 parent_contact TEXT,
+                parent_email TEXT,
                 medical_info TEXT,
                 class_id TEXT,
                 admission_date TEXT,
@@ -487,6 +488,8 @@ const database = {
         await ensureColumn('students', 'school_id', 'TEXT');
         await ensureColumn('students', 'full_name', 'TEXT');
         await ensureColumn('students', 'student_code', 'TEXT');
+        await ensureColumn('students', 'term_attendance', 'TEXT');
+        await ensureColumn('students', 'parent_email', 'TEXT');
         await ensureColumn('students', 'current_level', 'TEXT');
         await ensureColumn('students', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
         await ensureColumn('students', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
@@ -735,9 +738,18 @@ const database = {
     },
 
     updateSchool: function (id, updates) {
-        const allowed = ['name', 'code', 'logo_url', 'motto', 'address', 'email', 'phone', 'website', 'principal_name', 'principal_phone', 'principal_email', 'support_email', 'school_type', 'primary_color', 'secondary_color', 'session_system', 'state', 'country', 'student_count_estimate', 'staff_count_estimate', 'status', 'login_enabled', 'subscription_plan', 'subscription_expires_at', 'approved_by', 'approved_at', 'rejection_reason'];
+        const allowed = ['name', 'code', 'logo_url', 'motto', 'address', 'email', 'phone', 'website', 'principal_name', 'principal_phone', 'principal_email', 'support_email', 'school_type', 'primary_color', 'secondary_color', 'session_system', 'state', 'country', 'student_count_estimate', 'staff_count_estimate', 'status', 'login_enabled', 'subscription_plan', 'subscription_expires_at', 'approved_by', 'approved_at', 'rejection_reason', 'settings'];
         const fields = []; const values = [];
-        for (const [key, value] of Object.entries(updates)) if (allowed.includes(key) && value !== undefined) { fields.push(`${key} = ?`); values.push(value); }
+        for (const [key, value] of Object.entries(updates)) {
+            if (!allowed.includes(key) || value === undefined) continue;
+            if (key === 'settings') {
+                fields.push('settings = ?');
+                values.push(serializeJson(value));
+            } else {
+                fields.push(`${key} = ?`);
+                values.push(value);
+            }
+        }
         if (!fields.length) return this.getSchoolById(id);
         fields.push('updated_at = CURRENT_TIMESTAMP'); values.push(id);
         return run(`UPDATE schools SET ${fields.join(', ')} WHERE id = ?`, values).then(() => this.getSchoolById(id));
@@ -828,6 +840,9 @@ const database = {
                 parentName: student.parent_name,
                 parent_contact: student.parent_contact,
                 contactNumber: student.parent_contact,
+                parent_email: student.parent_email || null,
+                parentEmail: student.parent_email || null,
+                term_attendance: student.term_attendance ? serializeJson(student.term_attendance) : null,
                 medical_info: student.medical_info || null,
                 notes: student.medical_info || null,
                 class_id: student.class_id || null,
@@ -873,8 +888,13 @@ const database = {
             if (key === 'current_level' || key === 'currentLevel') {
                 continue;
             }
-            fields.push(`${key} = ?`);
-            values.push(value);
+            if (key === 'term_attendance' || key === 'termAttendance') {
+                fields.push('term_attendance = ?');
+                values.push(serializeJson(value));
+            } else {
+                fields.push(`${key} = ?`);
+                values.push(value);
+            }
         }
         if (currentLevel !== undefined) {
             fields.push('current_level = ?');
@@ -1197,11 +1217,28 @@ const database = {
     },
 
     listResultsByStudent: function (studentId) {
-        return all('SELECT * FROM results WHERE student_id = ? ORDER BY created_at DESC', [studentId]);
+        return all(`
+            SELECT r.*, e.title AS exam_title, e.term AS exam_term, e.session AS exam_session, e.subject_id AS exam_subject_id
+            FROM results r
+            LEFT JOIN exams e ON e.id = r.exam_id
+            WHERE r.student_id = ?
+            ORDER BY r.created_at DESC
+        `, [studentId]);
     },
 
     listResultsByExam: function (examId) {
         return all('SELECT * FROM results WHERE exam_id = ? ORDER BY created_at DESC', [examId]);
+    },
+
+    getResultByExamAndStudent: function (examId, studentId) {
+        return get('SELECT * FROM results WHERE exam_id = ? AND student_id = ?', [examId, studentId]);
+    },
+
+    updateResult: function (id, result) {
+        return run(
+            'UPDATE results SET score = ?, grade = ?, remarks = ? WHERE id = ?',
+            [result.score, result.grade, result.remarks || null, id]
+        ).then(() => this.getResultById(id));
     },
 
     // Fees
