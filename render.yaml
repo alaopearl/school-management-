@@ -1,12 +1,16 @@
 services:
   - type: web
-    name: school-management-
+    name: school-management
     env: node
     plan: free
     branch: main
     buildCommand: npm install && npm --workspace frontend run build
-    startCommand: npm --workspace backend start
+    startCommand: node server.js
     envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
       - key: DATABASE_PATH
         value: ./students.db
       - key: JWT_SECRET
