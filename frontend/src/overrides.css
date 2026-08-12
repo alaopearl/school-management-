@@ -18,11 +18,12 @@ body{background:var(--bg);color:#0f1724;-webkit-font-smoothing:antialiased}
 .sidebar nav button.active{background:linear-gradient(180deg,var(--accent) 0%,var(--accent-2) 100%);box-shadow:0 8px 20px rgba(37,99,235,0.12)}
 
 .page-content{padding:32px}
+.workspace-grid{display:grid;gap:22px;grid-template-columns:1fr}
+.workspace-grid.two-up{grid-template-columns:1.35fr .85fr}
+.workspace-grid.three-up{grid-template-columns:1.2fr .9fr .9fr}
 .panel{background:var(--card);border-radius:12px;padding:20px;box-shadow:var(--shadow-1);border:1px solid rgba(15,23,36,0.04)}
-.panel-heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
-.panel-heading h3{margin:0;font:700 16px Manrope;color:#0f1724}
-
-.ticket-form input,.ticket-form select,.ticket-form textarea,.login-card input{border:1px solid rgba(15,23,36,0.08);background:var(--surface-2);padding:11px;border-radius:8px}
+.panel.records{display:flex;flex-direction:column;gap:18px;min-height:700px;overflow-x:hidden}
+.panel.records .student-table{max-width:100%;overflow-x:auto;min-width:0}
 .ticket-form label{color:var(--muted);font-weight:600}
 .ticket-fields{gap:14px}
 
@@ -78,6 +79,7 @@ input:focus,textarea:focus,select:focus{outline:none;box-shadow:0 6px 18px rgba(
   .backdrop{display:block;position:fixed;inset:0;background:rgba(10,30,39,.43);z-index:50}
   /* Ensure main content doesn't shift when menu opens */
   main{transform:none}
+  .workspace-grid, .mini-grid{grid-template-columns:1fr !important;display:grid !important}
 }
 
 .school-icon-img{width:44px;height:44px;border-radius:10px;object-fit:cover}

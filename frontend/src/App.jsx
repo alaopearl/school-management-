@@ -581,7 +581,7 @@ function App() {
         </div>
       )}
 
-      {active === 'overview' && (
+{active === 'overview' && !user && (
         <div style={{ margin: '24px 18px 0' }}>
           <div className="panel records">
             <div className="panel-heading"><div><h3>Create school account</h3><p>Register a new school and administrator account</p></div></div>
