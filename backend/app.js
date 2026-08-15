@@ -101,12 +101,4 @@ app.use('/api/users', usersRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/contact', contactRoutes);
 
-(async () => {
-    try {
-        await db.initialize();
-    } catch (error) {
-        console.error('Failed to initialize database:', error.message);
-    }
-})();
-
 module.exports = app;

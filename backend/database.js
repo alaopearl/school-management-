@@ -181,30 +181,43 @@ const database = {
         const superAdminEmail = process.env.SUPER_ADMIN_EMAIL;
         const superAdminPassword = process.env.SUPER_ADMIN_PASSWORD;
         const superAdminName = process.env.SUPER_ADMIN_NAME || 'Platform Super Admin';
+        
         if (superAdminEmail && superAdminPassword) {
-            const existingSuperAdmin = await this.getUserByEmail(superAdminEmail);
-            const hashedPassword = await bcrypt.hash(superAdminPassword, 10);
-            if (existingSuperAdmin) {
-                await this.updateUser(existingSuperAdmin.id, {
-                    email: superAdminEmail,
-                    password: hashedPassword,
-                    full_name: superAdminName,
-                    role: 'SUPER_ADMIN',
-                    school_id: null,
-                    status: 'ACTIVE'
-                });
-            } else {
-                await this.createUser({
-                    id: uuidv4(),
-                    school_id: null,
-                    email: superAdminEmail,
-                    password: hashedPassword,
-                    full_name: superAdminName,
-                    phone: process.env.SUPER_ADMIN_PHONE || null,
-                    role: 'SUPER_ADMIN',
-                    status: 'ACTIVE'
-                });
+            console.log(`[DB INIT] Creating/updating super-admin with email: ${superAdminEmail}`);
+            try {
+                const existingSuperAdmin = await this.getUserByEmail(superAdminEmail.toLowerCase());
+                const hashedPassword = await bcrypt.hash(superAdminPassword, 10);
+                
+                if (existingSuperAdmin) {
+                    console.log(`[DB INIT] Super-admin exists, updating password and role`);
+                    await this.updateUser(existingSuperAdmin.id, {
+                        email: superAdminEmail.toLowerCase(),
+                        password: hashedPassword,
+                        full_name: superAdminName,
+                        role: 'SUPER_ADMIN',
+                        school_id: null,
+                        status: 'ACTIVE'
+                    });
+                    console.log(`[DB INIT] Super-admin updated successfully`);
+                } else {
+                    console.log(`[DB INIT] Creating new super-admin`);
+                    await this.createUser({
+                        id: uuidv4(),
+                        school_id: null,
+                        email: superAdminEmail.toLowerCase(),
+                        password: hashedPassword,
+                        full_name: superAdminName,
+                        phone: process.env.SUPER_ADMIN_PHONE || null,
+                        role: 'SUPER_ADMIN',
+                        status: 'ACTIVE'
+                    });
+                    console.log(`[DB INIT] Super-admin created successfully`);
+                }
+            } catch (err) {
+                console.error(`[DB INIT] Error creating/updating super-admin:`, err.message);
             }
+        } else {
+            console.warn(`[DB INIT] SUPER_ADMIN_EMAIL or SUPER_ADMIN_PASSWORD not set in environment`);
         }
 
         await run(`
