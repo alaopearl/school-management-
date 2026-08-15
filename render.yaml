@@ -32,6 +32,6 @@ services:
       - key: CLOUDINARY_URL
         value: ''
       - key: SUPER_ADMIN_EMAIL
-        value: admin@school.local
+        value: school.management.website01@gmail.com
       - key: SUPER_ADMIN_PASSWORD
-        value: ChangeMe123!
+        value: PEARLMAN11..
