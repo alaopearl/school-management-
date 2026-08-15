@@ -14,14 +14,15 @@ const twilio = (() => {
 router.post('/send', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SCHOOL_ADMIN', 'TEACHER'), async (req, res) => {
     try {
         const { recipientId, recipientType, subject, message, notificationType, channel } = req.body;
+        const normalizedType = String(recipientType || '').toUpperCase();
         if (!message || !channel) {
             return res.status(400).json({ error: 'message and channel are required' });
         }
 
         const notification = {
             id: uuidv4(),
-            recipient_id: recipientId || (recipientType === 'ALL' ? 'ALL' : null),
-            recipient_type: recipientType || 'USER',
+            recipient_id: recipientId || (normalizedType === 'ALL' ? 'ALL' : null),
+            recipient_type: normalizedType || 'USER',
             subject: subject || 'Notification',
             message,
             type: notificationType || 'GENERAL',
@@ -38,15 +39,18 @@ router.post('/send', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SCHOOL_AD
 
         // expand recipients into per-user rows
         let targetUsers = [];
-        if ((recipientType === 'ALL') || (recipientId === 'ALL')) {
+        if ((normalizedType === 'ALL') || (recipientId === 'ALL')) {
             const users = await db.listUsersBySchool(null);
             targetUsers = users.map(u => u.id);
-        } else if (recipientType === 'SCHOOL' && req.body.recipient_id) {
+        } else if (normalizedType === 'PARENTS' || recipientId === 'PARENTS') {
+            const users = await db.listUsersBySchool(req.user.role === 'SUPER_ADMIN' ? (req.body.school_id || req.user.school_id || null) : req.user.school_id);
+            targetUsers = users.filter((u) => u.role === 'PARENT').map((u) => u.id);
+        } else if (normalizedType === 'SCHOOL' && req.body.recipient_id) {
             const users = await db.listUsersBySchool(req.body.recipient_id);
             targetUsers = users.map(u => u.id);
-        } else if (recipientType === 'USER' && recipientId) {
+        } else if (normalizedType === 'USER' && recipientId) {
             targetUsers = [recipientId];
-        } else if (recipientType === 'SCHOOL' && req.user.role === 'SUPER_ADMIN' && !req.body.recipient_id) {
+        } else if (normalizedType === 'SCHOOL' && req.user.role === 'SUPER_ADMIN' && !req.body.recipient_id) {
             // if super admin and no school provided, use active school context
             const schoolId = req.query.school_id || req.user.school_id || null;
             const users = await db.listUsersBySchool(schoolId);

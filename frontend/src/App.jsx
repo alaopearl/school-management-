@@ -24,6 +24,21 @@ const api = async (endpoint, token, options = {}) => {
 };
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
+const getGreeting = (date = new Date()) => {
+  const hour = date.getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
+};
+const formatOverviewDate = (date = new Date()) => date.toLocaleDateString(undefined, {
+  weekday: 'long',
+  day: 'numeric',
+  month: 'long'
+}).toUpperCase();
+const formatOverviewTime = (date = new Date()) => date.toLocaleTimeString([], {
+  hour: 'numeric',
+  minute: '2-digit'
+});
 
 const getStudentId = (student) => student?.id || student?.student_id || student?.student_code || '';
 const getStudentName = (student) => student?.full_name || student?.name || 'Unnamed student';
@@ -687,12 +702,24 @@ function Overview({ setActive, students, user, token, school, openStudentForm, o
   if (user?.role === 'SUPER_ADMIN') return <PlatformOverview token={token} />;
   if (user?.role === 'PARENT') return <ParentLanding token={token} user={user} />;
 
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const greeting = getGreeting(now);
+  const displayName = user?.full_name ? user.full_name.split(' ')[0] : 'Admin';
+  const dateLabel = formatOverviewDate(now);
+  const timeLabel = formatOverviewTime(now);
+
   return (
     <>
       <section className="welcome">
         <div>
-          <p className="eyebrow">MONDAY, 27 JULY</p>
-          <h2>Good morning, Admin <span>👋</span></h2>
+          <p className="eyebrow">{dateLabel}</p>
+          <h2>{greeting}, {displayName} <span>👋</span></h2>
+          <p style={{ marginTop: 6, color: '#475569', fontWeight: 600 }}>{timeLabel}</p>
           <p>Here’s what’s happening at {school?.name || 'your school'} today.</p>
         </div>
         <button className="primary" onClick={openStudentForm}>+ Add new student</button>
@@ -1095,6 +1122,16 @@ function AttendanceWorkspace({ token, user, school, students, setNotice }) {
 function CalendarWorkspace({ token, user, school, students, setNotice }) {
   const [attendanceMap, setAttendanceMap] = useState({});
   const [savingStudentId, setSavingStudentId] = useState(null);
+  const [parentMeeting, setParentMeeting] = useState({
+    date: '',
+    title: 'Parent meeting',
+    message: 'We invite you to attend the school parent meeting.',
+    channel: 'EMAIL'
+  });
+  const [meetingList, setMeetingList] = useState([]);
+  const [editingMeetingId, setEditingMeetingId] = useState(null);
+  const [meetingLoading, setMeetingLoading] = useState(false);
+  const [meetingError, setMeetingError] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const hasSchoolContext = user?.role !== 'SUPER_ADMIN' || !!user?.school_id;
@@ -1113,6 +1150,12 @@ function CalendarWorkspace({ token, user, school, students, setNotice }) {
     setAttendanceMap(map);
   }, [students]);
 
+  useEffect(() => {
+    const settings = parseSettings(school?.settings);
+    const parsedMeetings = Array.isArray(settings.parent_meetings) ? settings.parent_meetings : [];
+    setMeetingList(parsedMeetings);
+  }, [school?.settings]);
+
   const calendar = parseSettings(school?.settings);
   const academicCalendar = {
     openTime: calendar.open_time || '08:00',
@@ -1122,7 +1165,8 @@ function CalendarWorkspace({ token, user, school, students, setNotice }) {
       { name: 'Second Term', start: '', end: '' },
       { name: 'Third Term', start: '', end: '' }
     ],
-    holidays: Array.isArray(calendar.holidays) ? calendar.holidays : []
+    holidays: Array.isArray(calendar.holidays) ? calendar.holidays : [],
+    parentMeetings: Array.isArray(calendar.parent_meetings) ? calendar.parent_meetings : []
   };
 
   const saveTermAttendance = async (studentId) => {
@@ -1141,6 +1185,100 @@ function CalendarWorkspace({ token, user, school, students, setNotice }) {
       setError(err.message || 'Unable to save term attendance summary');
     } finally {
       setSavingStudentId(null);
+    }
+  };
+
+  const persistMeetingList = async (nextMeetings) => {
+    const nextSettings = {
+      ...calendar,
+      parent_meetings: nextMeetings
+    };
+
+    if (school?.id) {
+      await api(`/schools/${school.id}`, token, {
+        method: 'PUT',
+        body: JSON.stringify({ settings: nextSettings })
+      });
+    }
+    setMeetingList(nextMeetings);
+  };
+
+  const resetMeetingForm = () => {
+    setEditingMeetingId(null);
+    setParentMeeting({
+      date: '',
+      title: 'Parent meeting',
+      message: 'We invite you to attend the school parent meeting.',
+      channel: 'EMAIL'
+    });
+  };
+
+  const handleMeetingEdit = (meeting) => {
+    setEditingMeetingId(meeting.id || `${meeting.date}-${meeting.title}`);
+    setParentMeeting({
+      date: meeting.date || '',
+      title: meeting.title || 'Parent meeting',
+      message: meeting.message || '',
+      channel: meeting.channel || 'EMAIL'
+    });
+  };
+
+  const handleMeetingDelete = async (meetingId) => {
+    const nextMeetings = meetingList.filter((meeting) => (meeting.id || `${meeting.date}-${meeting.title}`) !== meetingId);
+    try {
+      await persistMeetingList(nextMeetings);
+      if (editingMeetingId === meetingId) {
+        resetMeetingForm();
+      }
+      setNotice('Parent meeting removed.');
+    } catch (err) {
+      setMeetingError(err.message || 'Unable to remove this parent meeting.');
+    }
+  };
+
+  const sendParentMeetingMessage = async (event) => {
+    event.preventDefault();
+    if (!parentMeeting.date || !parentMeeting.message.trim()) {
+      setMeetingError('Please select a meeting date and add a message.');
+      return;
+    }
+
+    setMeetingLoading(true);
+    setMeetingError('');
+    try {
+      const subject = parentMeeting.title?.trim() || 'Parent Meeting';
+      const normalizedMeetingId = editingMeetingId || `${Date.now()}`;
+      const meetingEntry = {
+        id: normalizedMeetingId,
+        date: parentMeeting.date,
+        title: subject,
+        message: parentMeeting.message,
+        channel: parentMeeting.channel || 'EMAIL',
+        created_at: new Date().toISOString()
+      };
+      const nextMeetings = editingMeetingId
+        ? meetingList.map((meeting) => ((meeting.id || `${meeting.date}-${meeting.title}`) === editingMeetingId ? meetingEntry : meeting))
+        : [...meetingList, meetingEntry];
+
+      await api('/notifications/send', token, {
+        method: 'POST',
+        body: JSON.stringify({
+          recipientType: 'PARENTS',
+          recipientId: 'ALL',
+          subject,
+          message: `Parent meeting scheduled for ${parentMeeting.date}. ${parentMeeting.message}`,
+          notificationType: 'PARENT_MEETING',
+          channel: parentMeeting.channel || 'EMAIL'
+        })
+      });
+
+      await persistMeetingList(nextMeetings);
+      setNotice(editingMeetingId ? 'Parent meeting updated.' : 'Parent meeting notice sent to all parents.');
+      resetMeetingForm();
+    } catch (err) {
+      setMeetingError(err.message || 'Unable to send the parent meeting notice.');
+    } finally {
+      setMeetingLoading(false);
     }
   };
 
@@ -1174,6 +1312,40 @@ function CalendarWorkspace({ token, user, school, students, setNotice }) {
                 <div className="table-row" key={`${holiday.date}-${holiday.label}`}><span>{holiday.date}</span><span>{holiday.label || 'Holiday'}</span><span></span><span></span></div>
               ))}</div>
             ) : <div className="empty-state"><div>⌛</div><h3>No public holidays set</h3><p>Set holidays in School settings to populate this calendar.</p></div>}
+
+            <form className="panel ticket-form" onSubmit={sendParentMeetingMessage} style={{ marginTop: 18 }}>
+              <h3>{editingMeetingId ? 'Edit parent meeting' : 'Parent meeting'}</h3>
+              <label>Date<input type="date" value={parentMeeting.date} onChange={(e) => setParentMeeting((current) => ({ ...current, date: e.target.value }))} required /></label>
+              <label>Meeting title<input value={parentMeeting.title} onChange={(e) => setParentMeeting((current) => ({ ...current, title: e.target.value }))} required /></label>
+              <label>Message<textarea rows="4" value={parentMeeting.message} onChange={(e) => setParentMeeting((current) => ({ ...current, message: e.target.value }))} required /></label>
+              <label>Send via<select value={parentMeeting.channel} onChange={(e) => setParentMeeting((current) => ({ ...current, channel: e.target.value }))}><option value="EMAIL">Email</option><option value="IN_APP">In-app</option><option value="SMS">SMS</option><option value="WHATSAPP">WhatsApp</option></select></label>
+              {meetingError && <div className="form-error">{meetingError}</div>}
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <button className="primary" disabled={meetingLoading}>{meetingLoading ? (editingMeetingId ? 'Saving…' : 'Sending…') : (editingMeetingId ? 'Save changes' : 'Notify all parents')}</button>
+                {editingMeetingId && <button type="button" className="secondary" onClick={resetMeetingForm}>Cancel</button>}
+              </div>
+            </form>
+
+            <div className="panel-heading" style={{ marginTop: 18 }}><div><h3>Scheduled parent meetings</h3><p>Upcoming parent notices saved for this school.</p></div></div>
+            {meetingList.length ? (
+              <div className="student-table">
+                <div className="table-head"><span>DATE</span><span>TITLE</span><span>CHANNEL</span><span></span></div>
+                {meetingList.slice().reverse().map((meeting) => {
+                  const meetingId = meeting.id || `${meeting.date}-${meeting.title}`;
+                  return (
+                    <div className="table-row" key={meetingId}>
+                      <span>{meeting.date}</span>
+                      <span className="student-name"><b>{meeting.title}<small>{meeting.message}</small></b></span>
+                      <span>{meeting.channel}</span>
+                      <span style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                        <button type="button" className="secondary" onClick={() => handleMeetingEdit(meeting)}>Edit</button>
+                        <button type="button" className="secondary" onClick={() => handleMeetingDelete(meetingId)}>Delete</button>
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : <div className="empty-state"><div>🗓️</div><h3>No parent meetings scheduled</h3><p>Set the next meeting date and notify all parents.</p></div>}
           </div>
 
           <div className="panel records">
