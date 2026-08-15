@@ -31,3 +31,7 @@ services:
         value: support@example.com
       - key: CLOUDINARY_URL
         value: ''
+      - key: SUPER_ADMIN_EMAIL
+        value: admin@school.local
+      - key: SUPER_ADMIN_PASSWORD
+        value: ChangeMe123!
