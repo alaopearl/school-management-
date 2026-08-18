@@ -75,6 +75,11 @@ const serializeJson = (value) => {
     return typeof value === 'string' ? value : JSON.stringify(value);
 };
 
+const normalizeEmail = (value) => {
+    if (value == null) return null;
+    return String(value).trim().toLowerCase();
+};
+
 const normalizeStudentRecord = (student) => {
     if (!student) return student;
 
@@ -729,7 +734,8 @@ const database = {
     },
 
     getSchoolByCode: function (code) {
-        return get('SELECT * FROM schools WHERE code = ?', [code]);
+        if (!code) return null;
+        return get('SELECT * FROM schools WHERE LOWER(code) = LOWER(?)', [String(code).trim()]);
     },
 
     listSchools: function () {
@@ -791,14 +797,16 @@ const database = {
 
     // User operations
     createUser: function (user) {
+        const normalizedEmail = normalizeEmail(user.email);
         return run(
             `INSERT INTO users (id, school_id, email, password, full_name, role, phone, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [user.id, user.school_id, user.email, user.password, user.full_name, user.role, user.phone, user.status || 'ACTIVE']
+            [user.id, user.school_id, normalizedEmail, user.password, user.full_name, user.role, user.phone, user.status || 'ACTIVE']
         ).then(() => this.getUserById(user.id));
     },
 
     getUserByEmail: function (email) {
-        return get('SELECT * FROM users WHERE email = ?', [email]);
+        if (!email) return null;
+        return get('SELECT * FROM users WHERE LOWER(email) = LOWER(?)', [String(email).trim()]);
     },
 
     getSuperAdmin: function () {
@@ -820,8 +828,9 @@ const database = {
         const fields = [];
         const values = [];
         for (const [key, value] of Object.entries(updates)) {
+            const normalizedValue = key === 'email' ? normalizeEmail(value) : value;
             fields.push(`${key} = ?`);
-            values.push(value);
+            values.push(normalizedValue);
         }
         fields.push('updated_at = CURRENT_TIMESTAMP');
         values.push(id);

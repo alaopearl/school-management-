@@ -2,6 +2,18 @@
 
 This repository contains a student record tracking application with a Node.js/Express backend and a React frontend.
 
+## Platform super-admin login
+
+The platform super-admin is bootstrapped automatically when the backend starts. Set these environment variables in the live service before deploying:
+
+```text
+SUPER_ADMIN_EMAIL=your-admin-email@example.com
+SUPER_ADMIN_PASSWORD=use-a-strong-password
+SUPER_ADMIN_NAME=Platform Super Admin
+```
+
+The startup process creates the account if it does not exist and updates its password on subsequent restarts. Sign in from the normal **Sign in** form using `SUPER_ADMIN_EMAIL` and `SUPER_ADMIN_PASSWORD`. Keep these credentials in the hosting provider's secret environment settings, not in source control.
+
 ## Repository structure
 
 - `backend/` — Express app source, database setup, middleware, and API routes

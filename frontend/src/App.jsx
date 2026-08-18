@@ -672,7 +672,7 @@ function App() {
             </div>
             <>
               <h2>Welcome back</h2>
-              <p>Sign in to manage your school workspace.</p>
+              <p>Sign in as a school administrator or platform super admin.</p>
               <label>Email<input type="email" value={login.email} onChange={(e) => setLogin({ ...login, email: e.target.value })} required placeholder="you@school.edu" /></label>
               <label>Password<input type="password" value={login.password} onChange={(e) => setLogin({ ...login, password: e.target.value })} required placeholder="••••••••" /></label>
               <div style={{marginTop:8}}>
