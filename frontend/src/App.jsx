@@ -735,10 +735,10 @@ function Overview({ setActive, students, user, token, school, openStudentForm, o
         <button className="primary" onClick={openStudentForm}>+ Add new student</button>
       </section>
       <section className="metrics">
-        <Metric title="Total students" value="0" change="12.5%" icon="♙" color="indigo" />
-        <Metric title="Attendance today" value="0" change="2.4%" icon="✓" color="mint" />
-        <Metric title="Outstanding fees" value="0" change="8.2%" icon="₦" color="peach" />
-        <Metric title="Staff on duty" value="0" change="5.4%" icon="♟" color="lilac" />
+        <Metric title="Total students" value="0" change="0%" icon="♙" color="indigo" />
+        <Metric title="Attendance today" value="0%" change="0%" icon="✓" color="mint" />
+        <Metric title="Outstanding fees" value="₦0" change="0%" icon="₦" color="peach" />
+        <Metric title="Staff on duty" value="0" change="0%" icon="♟" color="lilac" />
       </section>
       <section className="dashboard-grid">
         <div className="panel enrollment">
