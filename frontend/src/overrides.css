@@ -85,3 +85,12 @@ input:focus,textarea:focus,select:focus{outline:none;box-shadow:0 6px 18px rgba(
 .school-icon-img{width:44px;height:44px;border-radius:10px;object-fit:cover}
 .school-icon{width:44px;height:44px;border-radius:10px;display:grid;place-items:center;background:linear-gradient(180deg,#f6f9ff,#ffffff);font-weight:700}
 
+
+.create-account-button{white-space:nowrap}
+@media(max-width:700px){.create-account-button{display:inline-flex;padding:8px 10px;font-size:11px;align-items:center}}
+
+.school-registration{scroll-margin-top:100px}
+
+.school-registration.registration-modal{position:fixed;inset:0;z-index:100;overflow-y:auto;margin:0 !important;padding:34px 18px;background:rgba(7,24,54,.62);scroll-margin-top:0}.school-registration.registration-modal .panel{width:min(900px,100%);margin:0 auto 32px;box-shadow:0 24px 70px rgba(0,0,0,.28)}@media(max-width:700px){.school-registration.registration-modal{padding:12px}.school-registration.registration-modal .panel{margin:0 auto 16px}}
+
+.school-actions{display:flex;gap:6px;justify-content:flex-end}.school-actions button{border:1px solid #bfdbfe;background:#eff6ff;color:#1d4ed8;border-radius:5px;padding:4px 7px;font:600 10px 'DM Sans';cursor:pointer}.school-actions .danger-action{border-color:#fecaca;background:#fff1f2;color:#be123c}

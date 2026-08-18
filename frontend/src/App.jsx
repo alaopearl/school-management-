@@ -76,6 +76,7 @@ function App() {
   const [students, setStudents] = useState([]);
   const [search, setSearch] = useState('');
   const [loginOpen, setLoginOpen] = useState(false);
+  const [registrationOpen, setRegistrationOpen] = useState(false);
   const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotOtp, setForgotOtp] = useState('');
@@ -142,6 +143,15 @@ function App() {
     if (key === 'student-detail') return !!selectedStudentId;
     return true;
   }), [user?.role, selectedStudentId]);
+
+  useEffect(() => {
+    if (!registrationOpen) return;
+    const timer = window.setTimeout(() => {
+      document.getElementById('school-registration')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      document.querySelector('#school-registration input')?.focus();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [registrationOpen]);
 
   useEffect(() => {
     if (!token) return;
@@ -540,7 +550,7 @@ function App() {
             <button className="search-button" onClick={() => setActive('students')}>⌕ <span>Search anything...</span><kbd>⌘ K</kbd></button>
             <button className="icon-button">◔<i></i></button>
             <button className="bell">♧<i></i></button>
-            {user ? <button className="user-button" onClick={logout}>Sign out</button> : <button className="user-button" onClick={() => setLoginOpen(true)}>Sign in</button>}
+            {user && token ? <button className="user-button" onClick={logout}>Sign out</button> : <><button className="user-button" onClick={() => setLoginOpen(true)}>Sign in</button><button className="primary create-account-button" onClick={() => { setActive('overview'); setRegistrationOpen(true); setLoginOpen(false); }}>Create account</button></>}
             {/* Dev-only role switcher (localhost only, and only when not authenticated) */}
             {isDevHost && !token && (
               <div className="dev-role">
@@ -596,10 +606,10 @@ function App() {
         </div>
       )}
 
-{active === 'overview' && !user && (
-        <div style={{ margin: '24px 18px 0' }}>
+{!token && (active === 'overview' || registrationOpen) && (
+        <div id="school-registration" className={`school-registration ${registrationOpen ? 'registration-modal' : ''}`} style={{ margin: '24px 18px 0' }}>
           <div className="panel records">
-            <div className="panel-heading"><div><h3>Create school account</h3><p>Register a new school and administrator account</p></div></div>
+            <div className="panel-heading"><div><h3>Create school account</h3><p>Register a new school and administrator account</p></div>{registrationOpen && <button type="button" onClick={() => setRegistrationOpen(false)}>Close</button>}</div>
             <form className="ticket-form" onSubmit={submitSchoolRegistration}>
               <div className="ticket-fields">
                 <label>School name<input value={schoolForm.schoolName} onChange={(e) => setSchoolForm({ ...schoolForm, schoolName: e.target.value })} required /></label>
@@ -842,6 +852,24 @@ function PlatformOverview({ token }) {
   }, [token]);
 
   const schoolMetrics = data?.schools || {};
+  const manageSchool = async (schoolEntry, action) => {
+    const labels = { approve: 'approve', suspend: 'suspend', activate: 'reactivate', remove: 'delete' };
+    if (action === 'remove' && !window.confirm(`Delete ${schoolEntry.name}? This cannot be undone.`)) return;
+    setError('');
+    setLoadingSchools(true);
+    try {
+      let response;
+      if (action === 'approve') response = await api(`/schools/${schoolEntry.id}/approve`, token, { method: 'POST' });
+      if (action === 'suspend') response = await api(`/schools/${schoolEntry.id}/status`, token, { method: 'POST', body: JSON.stringify({ status: 'SUSPENDED', loginEnabled: false }) });
+      if (action === 'activate') response = await api(`/schools/${schoolEntry.id}/status`, token, { method: 'POST', body: JSON.stringify({ status: 'ACTIVE', loginEnabled: true }) });
+      if (action === 'remove') { await api(`/schools/${schoolEntry.id}`, token, { method: 'DELETE' }); setSchools((current) => current.filter((item) => item.id !== schoolEntry.id)); return; }
+      if (response?.data) setSchools((current) => current.map((item) => item.id === schoolEntry.id ? { ...item, ...response.data } : item));
+    } catch (err) {
+      setError(`Could not ${labels[action]} ${schoolEntry.name}: ${err.message}`);
+    } finally {
+      setLoadingSchools(false);
+    }
+  };
 
   return (
     <>
@@ -871,7 +899,7 @@ function PlatformOverview({ token }) {
                 <span>{schoolEntry.code}</span>
                 <span>{schoolEntry.status}</span>
                 <span>{schoolEntry.principal_name || 'Pending'}</span>
-                <span></span>
+                <span className="school-actions">{schoolEntry.status === 'PENDING_APPROVAL' && <button onClick={() => manageSchool(schoolEntry, 'approve')}>Approve</button>}{schoolEntry.status === 'ACTIVE' ? <button onClick={() => manageSchool(schoolEntry, 'suspend')}>Suspend</button> : schoolEntry.status !== 'PENDING_APPROVAL' && <button onClick={() => manageSchool(schoolEntry, 'activate')}>Activate</button>}<button className="danger-action" onClick={() => manageSchool(schoolEntry, 'remove')}>Delete</button></span>
               </div>
             ))}
           </div>
