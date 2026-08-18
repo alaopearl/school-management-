@@ -75,6 +75,7 @@ function App() {
   const [school, setSchool] = useState(null);
   const [students, setStudents] = useState([]);
   const [search, setSearch] = useState('');
+  const [overviewFilter, setOverviewFilter] = useState({ class: 'ALL', gender: 'ALL', status: 'ALL' });
   const [loginOpen, setLoginOpen] = useState(false);
   const [registrationOpen, setRegistrationOpen] = useState(false);
   const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
@@ -265,6 +266,15 @@ function App() {
     setSelectedStudentId(id);
     setActive('student-detail');
   };
+
+  const filteredOverviewStudents = useMemo(() => {
+    return (students || []).filter((student) => {
+      const genderOK = overviewFilter.gender === 'ALL' || (student.gender || '').toLowerCase() === overviewFilter.gender.toLowerCase();
+      const classOK = overviewFilter.class === 'ALL' || getStudentClass(student) === overviewFilter.class;
+      const statusOK = overviewFilter.status === 'ALL' || (student.status || 'ACTIVE').toLowerCase() === overviewFilter.status.toLowerCase();
+      return genderOK && classOK && statusOK;
+    });
+  }, [students, overviewFilter]);
 
   const editStudent = (student) => {
     openStudentForm(student);
@@ -639,7 +649,7 @@ function App() {
         {notice && <div className="notice">{notice}<button onClick={() => setNotice('')}>×</button></div>}
         <div className="page-content">
           {active === 'overview' ? (
-            <Overview setActive={setActive} students={visibleStudents} user={user} token={token} school={school} openStudentForm={openStudentForm} onViewDetails={viewStudentDetails} onEditStudent={editStudent} onDeleteStudent={deleteStudent} />
+            <Overview setActive={setActive} students={filteredOverviewStudents} user={user} token={token} school={school} openStudentForm={openStudentForm} onViewDetails={viewStudentDetails} onEditStudent={editStudent} onDeleteStudent={deleteStudent} overviewFilter={overviewFilter} setOverviewFilter={setOverviewFilter} />
           ) : active === 'parent-portal' ? (
             user?.role === 'PARENT' ? <ParentLanding token={token} user={user} /> : <div className="panel">Access restricted</div>
           ) : active === 'student-portal' ? (
@@ -785,7 +795,7 @@ function App() {
   );
 }
 
-function Overview({ setActive, students, user, token, school, openStudentForm, onViewDetails, onEditStudent, onDeleteStudent }) {
+function Overview({ setActive, students, user, token, school, openStudentForm, onViewDetails, onEditStudent, onDeleteStudent, overviewFilter, setOverviewFilter }) {
   if (user?.role === 'SUPER_ADMIN') return <PlatformOverview token={token} />;
   if (user?.role === 'PARENT') return <ParentLanding token={token} user={user} />;
 
@@ -800,6 +810,10 @@ function Overview({ setActive, students, user, token, school, openStudentForm, o
   const dateLabel = formatOverviewDate(now);
   const timeLabel = formatOverviewTime(now);
 
+  const classOptionsForOverview = ['ALL', ...new Set((students || []).map((student) => getStudentClass(student)).filter(Boolean))];
+  const genderOptionsForOverview = ['ALL', 'Male', 'Female'];
+  const statusOptionsForOverview = ['ALL', 'ACTIVE', 'INACTIVE', 'PENDING'];
+
   return (
     <>
       <section className="welcome">
@@ -810,6 +824,16 @@ function Overview({ setActive, students, user, token, school, openStudentForm, o
           <p>Here’s what’s happening at {school?.name || 'your school'} today.</p>
         </div>
         <button className="primary" onClick={openStudentForm}>+ Add new student</button>
+      </section>
+      <section className="panel records" style={{ marginBottom: 18 }}>
+        <div className="panel-heading">
+          <div><h3>School-wide dashboard filters</h3><p>Focus the overview by class, gender and student status.</p></div>
+        </div>
+        <div className="ticket-fields" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
+          <label>Class<select value={overviewFilter.class} onChange={(event) => setOverviewFilter((current) => ({ ...current, class: event.target.value }))}>{classOptionsForOverview.map((option) => <option key={option} value={option}>{option === 'ALL' ? 'All classes' : option}</option>)}</select></label>
+          <label>Gender<select value={overviewFilter.gender} onChange={(event) => setOverviewFilter((current) => ({ ...current, gender: event.target.value }))}>{genderOptionsForOverview.map((option) => <option key={option} value={option}>{option === 'ALL' ? 'All genders' : option}</option>)}</select></label>
+          <label>Status<select value={overviewFilter.status} onChange={(event) => setOverviewFilter((current) => ({ ...current, status: event.target.value }))}>{statusOptionsForOverview.map((option) => <option key={option} value={option}>{option === 'ALL' ? 'All statuses' : option}</option>)}</select></label>
+        </div>
       </section>
       <section className="metrics">
         <Metric title="Total students" value={students.length.toLocaleString()} change="0%" icon="♙" color="indigo" />
@@ -1491,6 +1515,16 @@ function StudentDetailWorkspace({ token, user, school, student, onClose }) {
   const [examLoading, setExamLoading] = useState(false);
   const [examError, setExamError] = useState('');
 
+  const printStyles = `
+    @media print {
+      .topbar, .sidebar, .mobile-menu, .collapse, .page-title, .notice, .workspace-title button, .student-table button, .secondary, .primary, .close, .blurb { display: none !important; }
+      .workspace { padding: 0 !important; }
+      .panel, .workspace-grid { box-shadow: none !important; border: 1px solid #e5e7eb !important; }
+      body { background: white !important; }
+      .detail-grid { grid-template-columns: repeat(2, minmax(180px, 1fr)) !important; }
+    }
+  `;
+
   if (!student) {
     return (
       <section className="workspace">
@@ -1569,13 +1603,17 @@ function StudentDetailWorkspace({ token, user, school, student, onClose }) {
 
   return (
     <section className="workspace">
+      <style>{printStyles}</style>
       <div className="workspace-title">
         <div>
           <p className="eyebrow">STUDENT PROFILE</p>
           <h2>{school?.name || 'School'}</h2>
           <p>{getStudentName(student)} • {getStudentClass(student)}</p>
         </div>
-        <button className="secondary" type="button" onClick={onClose}>Back to students</button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="secondary" type="button" onClick={() => window.print()}>Print report</button>
+          <button className="secondary" type="button" onClick={onClose}>Back to students</button>
+        </div>
       </div>
       <div style={{ marginBottom: 24 }}>
         <div className="panel" style={{ padding: 24, textAlign: 'center' }}>
@@ -1813,7 +1851,7 @@ function StaffWorkspace({ token, user, setNotice }) {
 function StaffTable({ teachers, removeStaff, editStaff }) {
   return (
     <div className="student-table">
-      <div className="table-head"><span>NAME</span><span>DEPARTMENT</span><span>EMAIL</span><span>STATUS</span></div>
+      <div className="table-head"><span>NAME</span><span>DEPARTMENT</span><span>EMAIL</span><span>STATUS</span><span></span></div>
       {(teachers || []).length ? teachers.map((t) => (
         <div className="table-row" key={t.id}>
           <span className="student-name"><i className={`student-avatar teal`}>{(t.full_name || '').split(' ').map(n=>n[0]).slice(0,2).join('')}</i><b>{t.full_name}<small>{t.id}</small></b></span>
@@ -1821,8 +1859,8 @@ function StaffTable({ teachers, removeStaff, editStaff }) {
           <span>{t.email || '—'}</span>
           <span><em className={(t.status || 'active').toLowerCase()}>{t.status || 'ACTIVE'}</em></span>
           <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
-            <button onClick={() => editStaff && editStaff(t)} style={{border:0,background:'transparent',color:'#0b5cff'}}>Edit</button>
-            <button onClick={() => removeStaff && removeStaff(t.id)} style={{border:0,background:'transparent',color:'#e11d48'}}>Remove</button>
+            <button type="button" className="secondary" onClick={() => editStaff && editStaff(t)}>Edit</button>
+            <button type="button" className="secondary" onClick={() => removeStaff && removeStaff(t.id)} style={{ color: '#b91c1c' }}>Delete</button>
           </div>
         </div>
       )) : (
