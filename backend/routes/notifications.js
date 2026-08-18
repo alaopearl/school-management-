@@ -11,7 +11,7 @@ const twilio = (() => {
 })();
 
 // Send notification (email/SMS/WhatsApp/in-app)
-router.post('/send', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SCHOOL_ADMIN', 'TEACHER'), async (req, res) => {
+router.post('/send', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SCHOOL_ADMIN', 'TEACHER', 'ACCOUNTANT', 'LIBRARIAN'), async (req, res) => {
     try {
         const { recipientId, recipientType, subject, message, notificationType, channel } = req.body;
         const normalizedType = String(recipientType || '').toUpperCase();
