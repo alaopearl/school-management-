@@ -94,6 +94,7 @@ function App() {
   const [studentError, setStudentError] = useState('');
   const [savingStudent, setSavingStudent] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState('');
+  const [editingStudentId, setEditingStudentId] = useState(null);
   const [schoolForm, setSchoolForm] = useState({
     schoolName: '',
     schoolCode: '',
@@ -263,6 +264,28 @@ function App() {
     if (!id) return;
     setSelectedStudentId(id);
     setActive('student-detail');
+  };
+
+  const editStudent = (student) => {
+    openStudentForm(student);
+  };
+
+  const deleteStudent = async (student) => {
+    const id = getStudentId(student);
+    if (!id) return;
+    if (!window.confirm(`Delete ${getStudentName(student)}? This action cannot be undone.`)) return;
+
+    try {
+      await api(`/students/${id}`, token, { method: 'DELETE' });
+      setStudents((current) => current.filter((item) => getStudentId(item) !== id));
+      if (selectedStudentId === id) {
+        setSelectedStudentId('');
+        setActive('students');
+      }
+      setNotice('Student record removed.');
+    } catch (error) {
+      setNotice(error.message || 'Unable to delete this student.');
+    }
   };
 
   const visibleStudents = useMemo(() => {
@@ -436,7 +459,7 @@ function App() {
     setNotice('You have been signed out.');
   };
 
-  const openStudentForm = () => {
+  const openStudentForm = (student = null) => {
     if (!user) {
       setLoginOpen(true);
       setNotice('Sign in as a School Administrator to add students.');
@@ -450,26 +473,24 @@ function App() {
       setNotice('Select a school context before adding a student.');
       return;
     }
-    setStudentError('');
-    setStudentModal(true);
-  };
 
-  const saveStudent = async (event) => {
-    event.preventDefault();
-    setSavingStudent(true);
-    setStudentError('');
-    try {
-      await api('/students', token, {
-        method: 'POST',
-        body: JSON.stringify({
-          ...studentForm,
-          gpa: Number(studentForm.gpa || 0),
-          status: 'ACTIVE',
-          ...schoolBody(user)
-        })
+    if (student) {
+      setEditingStudentId(getStudentId(student));
+      setStudentForm({
+        full_name: student.full_name || student.name || '',
+        date_of_birth: student.date_of_birth || student.dob || '',
+        gender: student.gender || '',
+        current_level: student.current_level || student.currentLevel || student.grade || '',
+        admission_date: student.admission_date || student.admissionDate || '',
+        parent_name: student.parent_name || student.guardian || student.guardian_name || '',
+        parent_contact: student.parent_contact || student.guardian_contact || student.parentContact || student.guardianContact || '',
+        parent_email: student.parent_email || student.parentEmail || '',
+        address: student.address || '',
+        gpa: student.gpa || '',
+        passport_url: student.passport_url || ''
       });
-      await loadStudents();
-      setStudentModal(false);
+    } else {
+      setEditingStudentId(null);
       setStudentForm({
         full_name: '',
         date_of_birth: '',
@@ -483,7 +504,53 @@ function App() {
         gpa: '',
         passport_url: ''
       });
-      setNotice('Student record created successfully.');
+    }
+    setStudentError('');
+    setStudentModal(true);
+  };
+
+  const saveStudent = async (event) => {
+    event.preventDefault();
+    setSavingStudent(true);
+    setStudentError('');
+    try {
+      const payload = {
+        ...studentForm,
+        gpa: Number(studentForm.gpa || 0),
+        status: 'ACTIVE',
+        ...schoolBody(user)
+      };
+
+      if (editingStudentId) {
+        await api(`/students/${editingStudentId}`, token, {
+          method: 'PUT',
+          body: JSON.stringify(payload)
+        });
+        setNotice('Student record updated successfully.');
+      } else {
+        await api('/students', token, {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        setNotice('Student record created successfully.');
+      }
+
+      await loadStudents();
+      setStudentModal(false);
+      setEditingStudentId(null);
+      setStudentForm({
+        full_name: '',
+        date_of_birth: '',
+        gender: '',
+        current_level: '',
+        admission_date: '',
+        parent_name: '',
+        parent_contact: '',
+        parent_email: '',
+        address: '',
+        gpa: '',
+        passport_url: ''
+      });
     } catch (error) {
       setStudentError(error.message);
     } finally {
@@ -572,13 +639,13 @@ function App() {
         {notice && <div className="notice">{notice}<button onClick={() => setNotice('')}>×</button></div>}
         <div className="page-content">
           {active === 'overview' ? (
-            <Overview setActive={setActive} students={visibleStudents} user={user} token={token} school={school} openStudentForm={openStudentForm} onViewDetails={viewStudentDetails} />
+            <Overview setActive={setActive} students={visibleStudents} user={user} token={token} school={school} openStudentForm={openStudentForm} onViewDetails={viewStudentDetails} onEditStudent={editStudent} onDeleteStudent={deleteStudent} />
           ) : active === 'parent-portal' ? (
             user?.role === 'PARENT' ? <ParentLanding token={token} user={user} /> : <div className="panel">Access restricted</div>
           ) : active === 'student-portal' ? (
             user?.role === 'STUDENT' ? <StudentLanding /> : <div className="panel">Access restricted</div>
           ) : (
-            <Workspace active={active} directoryStudents={visibleStudents} students={students} search={search} setSearch={setSearch} openStudentForm={openStudentForm} token={token} user={user} school={school} selectedStudentId={selectedStudentId} setSelectedStudentId={setSelectedStudentId} setNotice={setNotice} />
+            <Workspace active={active} directoryStudents={visibleStudents} students={students} search={search} setSearch={setSearch} openStudentForm={openStudentForm} token={token} user={user} school={school} selectedStudentId={selectedStudentId} setSelectedStudentId={setSelectedStudentId} setNotice={setNotice} onViewDetails={viewStudentDetails} onEditStudent={editStudent} onDeleteStudent={deleteStudent} />
           )}
         </div>
       </main>
@@ -654,12 +721,12 @@ function App() {
       )}
 
       {studentModal && (
-        <div className="modal-layer" onClick={() => setStudentModal(false)}>
+        <div className="modal-layer" onClick={() => { setStudentModal(false); setEditingStudentId(null); }}>
           <form className="student-card" onSubmit={saveStudent} onClick={(e) => e.stopPropagation()}>
-            <button type="button" className="close" onClick={() => setStudentModal(false)}>×</button>
+            <button type="button" className="close" onClick={() => { setStudentModal(false); setEditingStudentId(null); }}>×</button>
             <p className="eyebrow">STUDENT MANAGEMENT</p>
-            <h2>Add new student</h2>
-            <p>Create a student record for your school.</p>
+            <h2>{editingStudentId ? 'Edit student' : 'Add new student'}</h2>
+            <p>{editingStudentId ? 'Update the student record for your school.' : 'Create a student record for your school.'}</p>
             <div className="student-fields">
               <label>Full name<input value={studentForm.full_name} onChange={(e) => setStudentForm({ ...studentForm, full_name: e.target.value })} required /></label>
               <label>Gender<select value={studentForm.gender} onChange={(e) => setStudentForm({ ...studentForm, gender: e.target.value })} required><option value="">Select</option><option>Male</option><option>Female</option></select></label>
@@ -684,7 +751,7 @@ function App() {
               }
             }} placeholder="Upload passport photo" /></label>
             {studentError && <div className="form-error">{studentError}</div>}
-            <button className="primary" disabled={savingStudent}>{savingStudent ? 'Saving…' : 'Save student →'}</button>
+            <button className="primary" disabled={savingStudent}>{savingStudent ? 'Saving…' : (editingStudentId ? 'Update student →' : 'Save student →')}</button>
           </form>
         </div>
       )}
@@ -718,7 +785,7 @@ function App() {
   );
 }
 
-function Overview({ setActive, students, user, token, school, openStudentForm, onViewDetails }) {
+function Overview({ setActive, students, user, token, school, openStudentForm, onViewDetails, onEditStudent, onDeleteStudent }) {
   if (user?.role === 'SUPER_ADMIN') return <PlatformOverview token={token} />;
   if (user?.role === 'PARENT') return <ParentLanding token={token} user={user} />;
 
@@ -786,7 +853,7 @@ function Overview({ setActive, students, user, token, school, openStudentForm, o
           <div><h3>Recently added students</h3><p>Latest admissions to your school</p></div>
           <button onClick={() => setActive('students')}>View all students →</button>
         </div>
-        <StudentTable students={students.slice(0, 4)} onViewDetails={onViewDetails} />
+        <StudentTable students={students.slice(0, 4)} onViewDetails={onViewDetails} onEditStudent={onEditStudent} onDeleteStudent={onDeleteStudent} />
       </section>
     </>
   );
@@ -950,9 +1017,9 @@ function Event({ date, month, title, time, color }) {
   return <div className="event"><div className={`date ${color}`}><b>{date}</b><small>{month}</small></div><div><b>{title}</b><small>{time}</small></div><button>•••</button></div>;
 }
 
-function Workspace({ active, directoryStudents, students, search, setSearch, openStudentForm, token, user, school, selectedStudentId, setSelectedStudentId, setNotice, onViewDetails }) {
+function Workspace({ active, directoryStudents, students, search, setSearch, openStudentForm, token, user, school, selectedStudentId, setSelectedStudentId, setNotice, onViewDetails, onEditStudent, onDeleteStudent }) {
   if (active === 'help') return <SupportCenter token={token} user={user} school={school} />;
-  if (active === 'overview') return <Overview setActive={() => {}} students={directoryStudents} user={user} token={token} openStudentForm={openStudentForm} onViewDetails={onViewDetails} />;
+  if (active === 'overview') return <Overview setActive={() => {}} students={directoryStudents} user={user} token={token} openStudentForm={openStudentForm} onViewDetails={onViewDetails} onEditStudent={onEditStudent} onDeleteStudent={onDeleteStudent} />;
   if (active === 'attendance') return <AttendanceWorkspace token={token} user={user} school={school} students={students} setNotice={setNotice} />;
   if (active === 'calendar') return <CalendarWorkspace token={token} user={user} school={school} students={students} setNotice={setNotice} />;
   if (active === 'student-detail') {
@@ -984,7 +1051,7 @@ function Workspace({ active, directoryStudents, students, search, setSearch, ope
           <button>Filter ▾</button>
           <button>Export</button>
         </div>
-        <StudentTable students={filteredStudents} onViewDetails={onViewDetails} />
+        <StudentTable students={filteredStudents} onViewDetails={onViewDetails} onEditStudent={onEditStudent} onDeleteStudent={onDeleteStudent} />
       </div>
     </section>
   );
@@ -2766,7 +2833,7 @@ function SupportCenter({ token, user, school }) {
   );
 }
 
-function StudentTable({ students, onViewDetails }) {
+function StudentTable({ students, onViewDetails, onEditStudent, onDeleteStudent }) {
   return (
     <div className="student-table">
       <div className="table-head"><span>STUDENT</span><span>CLASS</span><span>GUARDIAN</span><span>STATUS</span><span></span></div>
@@ -2776,7 +2843,11 @@ function StudentTable({ students, onViewDetails }) {
           <span>{getStudentClass(student)}</span>
           <span>{getStudentGuardian(student)}</span>
           <span><em className={(student.status || 'active').toLowerCase().replace(' ', '-')}>{student.status || 'Active'}</em></span>
-          <button type="button" className="secondary" onClick={() => onViewDetails?.(student)}>View</button>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+            <button type="button" className="secondary" onClick={() => onViewDetails?.(student)}>View</button>
+            <button type="button" className="secondary" onClick={() => onEditStudent?.(student)}>Edit</button>
+            <button type="button" className="secondary" onClick={() => onDeleteStudent?.(student)}>Delete</button>
+          </div>
         </div>
       )) : (
         <div className="empty-state">
