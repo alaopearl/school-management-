@@ -745,7 +745,7 @@ function Overview({ setActive, students, user, token, school, openStudentForm, o
         <button className="primary" onClick={openStudentForm}>+ Add new student</button>
       </section>
       <section className="metrics">
-        <Metric title="Total students" value="0" change="0%" icon="♙" color="indigo" />
+        <Metric title="Total students" value={students.length.toLocaleString()} change="0%" icon="♙" color="indigo" />
         <Metric title="Attendance today" value="0%" change="0%" icon="✓" color="mint" />
         <Metric title="Outstanding fees" value="₦0" change="0%" icon="₦" color="peach" />
         <Metric title="Staff on duty" value="0" change="0%" icon="♟" color="lilac" />
