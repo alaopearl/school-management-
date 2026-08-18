@@ -1480,10 +1480,28 @@ function StudentDetailWorkspace({ token, user, school, student, onClose }) {
       <div className="workspace-title">
         <div>
           <p className="eyebrow">STUDENT PROFILE</p>
-          <h2>{getStudentName(student)}</h2>
-          <p>Review the student profile, stored term averages, and promotion recommendation.</p>
+          <h2>{school?.name || 'School'}</h2>
+          <p>{getStudentName(student)} • {getStudentClass(student)}</p>
         </div>
         <button className="secondary" type="button" onClick={onClose}>Back to students</button>
+      </div>
+      <div style={{ marginBottom: 24 }}>
+        <div className="panel" style={{ padding: 24, textAlign: 'center' }}>
+          {student?.passport_url ? (
+            <div style={{ marginBottom: 16 }}>
+              <img src={student.passport_url} alt="Student passport" style={{ maxWidth: 200, maxHeight: 250, borderRadius: 8, border: '2px solid #e5e7eb' }} />
+            </div>
+          ) : (
+            <div style={{ width: 200, height: 250, margin: '0 auto 16px', backgroundColor: '#f3f4f6', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px dashed #d1d5db' }}>
+              <div style={{ textAlign: 'center', color: '#9ca3af' }}>
+                <div style={{ fontSize: 32, marginBottom: 8 }}>📸</div>
+                <p>No passport uploaded</p>
+              </div>
+            </div>
+          )}
+          <h3 style={{ margin: '0 0 8px 0' }}>{getStudentName(student)}</h3>
+          <p style={{ color: '#6b7280', margin: 0 }}>{getStudentId(student)}</p>
+        </div>
       </div>
       <div className="workspace-grid two-up">
         <div className="panel">
@@ -1495,7 +1513,7 @@ function StudentDetailWorkspace({ token, user, school, student, onClose }) {
             <div><strong>Guardian</strong><span>{getStudentGuardian(student)}</span></div>
             <div><strong>Guardian contact</strong><span>{getStudentGuardianContact(student)}</span></div>
             <div><strong>Parent email</strong><span>{student.parent_email || student.parentEmail || 'Not provided'}</span></div>
-            <div><strong>Passport / ID</strong><span>{student.passport_number || student.passport || student.passport_url || 'Not provided'}</span></div>
+            <div><strong>Gender</strong><span>{student.gender || 'Not provided'}</span></div>
             <div><strong>Date of birth</strong><span>{student.date_of_birth || student.dob || 'Unknown'}</span></div>
             <div><strong>Admission date</strong><span>{student.admission_date || student.admissionDate || 'Unknown'}</span></div>
             <div style={{ gridColumn: '1 / -1' }}><strong>Address</strong><span>{student.address || 'Unspecified'}</span></div>
