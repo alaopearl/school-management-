@@ -955,7 +955,11 @@ function Workspace({ active, directoryStudents, students, search, setSearch, ope
   if (active === 'overview') return <Overview setActive={() => {}} students={directoryStudents} user={user} token={token} openStudentForm={openStudentForm} onViewDetails={onViewDetails} />;
   if (active === 'attendance') return <AttendanceWorkspace token={token} user={user} school={school} students={students} setNotice={setNotice} />;
   if (active === 'calendar') return <CalendarWorkspace token={token} user={user} school={school} students={students} setNotice={setNotice} />;
-  if (active === 'student-detail') return <StudentDetailWorkspace token={token} user={user} school={school} student={students.find((student) => getStudentId(student) === selectedStudentId)} onClose={() => { setSelectedStudentId(''); setActive('students'); }} />;
+  if (active === 'student-detail') {
+    const selectedStudent = students.find((student) => getStudentId(student) === selectedStudentId) || directoryStudents.find((student) => getStudentId(student) === selectedStudentId);
+    if (!selectedStudent) return <StudentDetailWorkspace token={token} user={user} school={school} student={null} onClose={() => { setSelectedStudentId(''); setActive('students'); }} />;
+    return <StudentDetailWorkspace token={token} user={user} school={school} student={selectedStudent} onClose={() => { setSelectedStudentId(''); setActive('students'); }} />;
+  }
   if (active === 'academics') return <AcademicsWorkspace token={token} user={user} setNotice={setNotice} />;
   if (active === 'finance') return <FinanceWorkspace token={token} user={user} students={students} setNotice={setNotice} />;
   if (active === 'messages') return <MessagesWorkspace token={token} user={user} setNotice={setNotice} />;
@@ -1419,6 +1423,27 @@ function StudentDetailWorkspace({ token, user, school, student, onClose }) {
   const [studentPosition, setStudentPosition] = useState(null);
   const [examLoading, setExamLoading] = useState(false);
   const [examError, setExamError] = useState('');
+
+  if (!student) {
+    return (
+      <section className="workspace">
+        <div className="workspace-title">
+          <div>
+            <p className="eyebrow">STUDENT PROFILE</p>
+            <h2>Student not found</h2>
+            <p>The student record could not be loaded. Please try again.</p>
+          </div>
+          <button className="secondary" type="button" onClick={onClose}>Back to students</button>
+        </div>
+        <div className="panel" style={{ padding: 24, textAlign: 'center' }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>⚠️</div>
+          <h3>No student data available</h3>
+          <p style={{ color: '#6b7280' }}>The selected student record could not be found. Please return to the students list and try again.</p>
+        </div>
+      </section>
+    );
+  }
+
   const record = student?.term_attendance || student?.termAttendance || {};
   const termValues = {
     first_term: record.first_term ?? record.firstTerm ?? '',
