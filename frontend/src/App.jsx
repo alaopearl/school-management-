@@ -128,7 +128,8 @@ function App() {
     parent_contact: '',
     parent_email: '',
     address: '',
-    gpa: ''
+    gpa: '',
+    passport_url: ''
   });
   const classOptions = [
     'Creche', 'Nursery 1', 'Nursery 2',
@@ -479,7 +480,8 @@ function App() {
         parent_contact: '',
         parent_email: '',
         address: '',
-        gpa: ''
+        gpa: '',
+        passport_url: ''
       });
       setNotice('Student record created successfully.');
     } catch (error) {
@@ -673,6 +675,14 @@ function App() {
               <label>Parent email<input type="email" value={studentForm.parent_email} onChange={(e) => setStudentForm({ ...studentForm, parent_email: e.target.value })} placeholder="parent@example.com" /></label>
             </div>
             <label>Address<textarea rows="2" value={studentForm.address} onChange={(e) => setStudentForm({ ...studentForm, address: e.target.value })} required /></label>
+            <label>Passport / ID photo <small>(optional)</small><input type="file" accept="image/*" onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) {
+                const reader = new FileReader();
+                reader.onload = () => setStudentForm({ ...studentForm, passport_url: reader.result });
+                reader.readAsDataURL(file);
+              }
+            }} placeholder="Upload passport photo" /></label>
             {studentError && <div className="form-error">{studentError}</div>}
             <button className="primary" disabled={savingStudent}>{savingStudent ? 'Saving…' : 'Save student →'}</button>
           </form>
