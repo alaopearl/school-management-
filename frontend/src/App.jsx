@@ -662,7 +662,7 @@ function App() {
             <p>Create a student record for your school.</p>
             <div className="student-fields">
               <label>Full name<input value={studentForm.full_name} onChange={(e) => setStudentForm({ ...studentForm, full_name: e.target.value })} required /></label>
-              <label>Gender<select value={studentForm.gender} onChange={(e) => setStudentForm({ ...studentForm, gender: e.target.value })} required><option value="">Select</option><option>Male</option><option>Female</option><option>Other</option></select></label>
+              <label>Gender<select value={studentForm.gender} onChange={(e) => setStudentForm({ ...studentForm, gender: e.target.value })} required><option value="">Select</option><option>Male</option><option>Female</option></select></label>
               <label>Date of birth<input type="date" value={studentForm.date_of_birth} onChange={(e) => setStudentForm({ ...studentForm, date_of_birth: e.target.value })} required /></label>
               <label>Level / class<select value={studentForm.current_level} onChange={(e) => setStudentForm({ ...studentForm, current_level: e.target.value })} required>
                 <option value="">Select class</option>
